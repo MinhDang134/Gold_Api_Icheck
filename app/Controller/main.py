@@ -7,7 +7,6 @@ from app.Controller import crud
 from app.Model import redis_cache
 from decimal import Decimal
 
-
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
@@ -102,13 +101,12 @@ def get_price(db: Session = Depends(get_db)):
         price_per_luong = price * luong_to_gram
 
         # Tạo một bảng ghi giá vàng mới trong database
-        new_gold_price = crud.create_gold_price(
-            db=db,
-            price=price,
-            price_per_ounce=price_per_ounce,
-            price_per_luong=price_per_luong,
-            price_per_gram=price
-        )
+        new_gold_price = crud.gold_crud.create(db, {
+            "price": price,
+            "price_per_ounce": price_per_ounce,
+            "price_per_luong": price_per_luong,
+            "price_per_gram": price
+        })
 
         logging.info(f"Lưu giá vàng vào database: {price}")
         return {"price": price, "timestamp": new_gold_price.timestamp}

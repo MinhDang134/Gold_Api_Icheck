@@ -22,5 +22,3 @@ def save_price_to_cache(redis_client, key: str, value: str):
         print(f"Đã lưu {key} vào Redis.")
     else:
         print(f"Lỗi khi lưu {key} vào Redis.")
-
-
