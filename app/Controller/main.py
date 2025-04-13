@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import Session
-import requests
+import asyncio
+import httpx
 import logging
 from app.Model import database
 from app.Controller import crud
@@ -18,9 +19,22 @@ def get_db():
     finally:
         db.close()
 
+async def fetch_price_api(client: httpx.AsyncClient, url: str, headers: dict):
+    try:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            price = Decimal(data['price'])
+            return price
+        else:
+            logging.info(f"Giá trị trả về API trạng thái là {response.status_code}")
+            raise HTTPException(status_code=500, detail="Không thể lấy dữ liệu từ API")
+    except Exception as e:
+        logging.info(f"Lỗi khi gọi API: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi không gọi được API: {str(e)}")
 
 @app.post("/get_price/")
-def get_price(db: Session = Depends(get_db)):
+async def get_price(db: Session = Depends(get_db)):
     try:
         # Kiểm tra cache Redis trước
         cached_price = redis_cache.get_price_from_cache(redis_cache.redis_client, "gold_price")
@@ -32,67 +46,38 @@ def get_price(db: Session = Depends(get_db)):
             "x-access-token": api_key  # Gửi API Key trong header
         }
 
-        if cached_price:
-            logging.info("Giá vàng đã được tìm thấy trong bộ nhớ đệm (Redis).")
-            price = Decimal(cached_price)
+        async with httpx.AsyncClient() as client:
+            if cached_price:
+                logging.info("Giá vàng đã được tìm thấy trong bộ nhớ đệm (Redis).")
+                price = Decimal(cached_price)
 
-            # Kiểm tra xem giá vàng trong cache có trùng với giá vàng từ API không
-            try:
-                response = requests.get(url, headers=headers)
-                logging.info(f"Trạng thái API: {response.status_code}")
+                # Request 1 và chờ 7 giây (được thực hiện đồng thời với request 2)
+                task1 = asyncio.create_task(fetch_price_api(client, url, headers))  # Request thứ 1
+                await asyncio.sleep(30)  # Ngủ 7 giây
 
-                if response.status_code == 200:
-                    data = response.json()
-                    price_per_ounce = data['price']
+                # Request 2 (được thực hiện song song với task1 khi đang chờ)
+                task2 = fetch_price_api(client, url, headers)  # Request thứ 2
 
-                    if price_per_ounce:
-                        price_from_api = Decimal(price_per_ounce)
-                        if price_from_api != price:
-                            logging.info("Giá vàng trong Redis không trùng với giá từ API, lấy giá từ API.")
-                            # Nếu giá từ API khác với giá trong cache, lưu giá từ API vào Redis
-                            formatted_price = str(price_from_api)
-                            redis_cache.save_price_to_cache(redis_cache.redis_client, "gold_price", formatted_price)
-                            price = price_from_api
-                        else:
-                            logging.info("Giá vàng trong Redis trùng với giá từ API.")
-                    else:
-                        logging.error("Nhận được dữ liệu không hợp lệ từ API.")
-                        raise HTTPException(status_code=500, detail="Dữ liệu không hợp lệ từ API.")
+                # Đợi kết quả từ cả hai request
+                price_from_api1 = await task1  # Kết quả từ request 1
+                price_from_api2 = await task2  # Kết quả từ request 2
+
+                # Kiểm tra và xử lý giá vàng từ các API
+                if price_from_api1 != price_from_api2:
+                    logging.info("Giá vàng từ hai request không trùng nhau. Cập nhật giá mới.")
+                    formatted_price = str(price_from_api2)  # Lấy giá từ lần request thứ 2
+                    redis_cache.save_price_to_cache(redis_cache.redis_client, "gold_price", formatted_price)
+                    price = price_from_api2
                 else:
-                    logging.error(f"API trả về lỗi: {response.status_code}")
-                    raise HTTPException(status_code=500, detail="Không thể lấy dữ liệu từ API.")
-            except Exception as e:
-                logging.error(f"Lỗi khi gọi API: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Lỗi khi gọi API: {str(e)}")
-
-        else:
-            # Nếu không có giá trong Redis, gọi API và lưu vào Redis
-            try:
-                response = requests.get(url, headers=headers)
-                logging.info(f"Trạng thái API: {response.status_code}")
-
-                if response.status_code == 200:
-                    data = response.json()
-                    price_per_ounce = data['price']
-
-                    if price_per_ounce:
-                        price = Decimal(price_per_ounce)
-                        formatted_price = str(price_per_ounce)
-
-                        # Lưu giá trị vào Redis Cache với TTL (thời gian sống) là 1 giờ (3600 giây)
-                        if redis_cache.save_price_to_cache(redis_cache.redis_client, "gold_price", formatted_price):
-                            logging.info(f"Đã lưu thông tin: {formatted_price} vào Redis")
-                        else:
-                            logging.error("Lỗi khi lưu giá vào Redis.")
-                    else:
-                        logging.error("Nhận được dữ liệu không hợp lệ từ API.")
-                        raise HTTPException(status_code=500, detail="Dữ liệu không hợp lệ từ API.")
+                    logging.info(f"Giá vàng từ hai request trùng nhau\ngiá vàng 1 {price_from_api1}\ngiá vàng 2 là {price_from_api2}")
+            else:
+                # Nếu không có giá trong Redis, gọi API và lưu vào Redis
+                price = await fetch_price_api(client, url, headers)
+                formatted_price = str(price)
+                if redis_cache.save_price_to_cache(redis_cache.redis_client, "gold_price", formatted_price):
+                    logging.info(f"Đã lưu thông tin: {formatted_price} vào Redis")
                 else:
-                    logging.error(f"API trả về lỗi: {response.status_code}")
-                    raise HTTPException(status_code=500, detail="Không thể lấy dữ liệu từ API.")
-            except Exception as e:
-                logging.error(f"Lỗi khi gọi API: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Lỗi khi gọi API: {str(e)}")
+                    logging.error("Lỗi khi lưu giá vào Redis.")
 
         # Tính giá vàng theo các đơn vị khác
         ounce_to_gram = Decimal('31.1035')

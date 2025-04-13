@@ -1,9 +1,7 @@
-# app/Controller/base_crud.py
 from sqlmodel import SQLModel, Session, select
 from typing import Type, TypeVar, Generic, Optional
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
-
 class CRUDBase(Generic[ModelType]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
