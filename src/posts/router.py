@@ -3,12 +3,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 import httpx
+import json
 from src.posts.Dependecies import get_db
+from src.posts.schemas import khung_data
 from src.posts.service import get_and_update_gold_price, calculate_gold_price
 from src.posts import redis_cache, crud
 from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
+from src.posts.redis_cache import redis_client
 
 router = APIRouter()
 
@@ -101,3 +104,30 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
     except Exception as e:
         logging.error(f"Lỗi khi xử lý yêu cầu: {str(e)}")
         raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
+
+@router.get("/search_data", response_model=khung_data)
+async def save_date(date: str):
+    try:
+        data_new = redis_client.get(date)
+        if data_new:
+            duyet_data = json.loads(data_new)
+            print("Data đã được trả về")
+            return khung_data(date=duyet_data['date'], price=duyet_data['price'])
+    except Exception as e:
+        logging.info("Không có dữ liệu nào được trả về ")
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date} lỗi là {str(e)}")
+
+    gold_minhdang = redis_client.lrange("Minhdang_list", 0, -1)
+
+    for timkiem in gold_minhdang:
+        gold_price = json.loads(timkiem)
+        try:
+            if gold_price['date'] == date:
+
+                return khung_data(
+                    date=gold_price['date'],
+                    price=gold_price['price']
+                )
+        except Exception as e:
+            logging.info("Không tìm thấy cái nào giống trong database hay cache ")
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date} và bị lõi này {str(e)}")

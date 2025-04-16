@@ -14,7 +14,9 @@ class GoldPriceBase(BaseModel):
 class GoldPriceCreate(GoldPriceBase):
     pass
 
-
+class khung_data(BaseModel):
+    date: str
+    price: float
 
 class GoldPrice(GoldPriceBase):
     id: int

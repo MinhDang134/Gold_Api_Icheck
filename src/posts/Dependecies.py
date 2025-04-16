@@ -2,6 +2,10 @@
 
 from src.posts.database import SessionLocal
 
+from src.posts.service import data_mau
+from contextlib import asynccontextmanager
+
+
 
 def get_db():
     db = SessionLocal()
@@ -9,3 +13,5 @@ def get_db():
         yield db
     finally:
         db.close()
+
+

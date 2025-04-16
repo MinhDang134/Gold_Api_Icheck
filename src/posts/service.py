@@ -6,6 +6,8 @@ from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException
 import asyncio
+import json
+from src.posts.redis_cache import redis_client
 from src.posts import redis_cache
 
 logging.basicConfig(level=logging.INFO)
@@ -64,3 +66,52 @@ def calculate_gold_price(price: Decimal):
     price_per_luong = price * luong_to_gram
 
     return price_per_ounce, price_per_luong, price
+
+
+def save_to_redis_list(redis_client, key, data):
+    try:
+        # Bước 1: Lấy tất cả các phần tử hiện có trong Redis list
+        current_items = redis_client.lrange(key, 0, -1)  # Get all items from the list
+
+        # Bước 2: Kiểm tra xem phần tử mới đã có trong list chưa
+        # Chúng ta sẽ so sánh ngày của phần tử mới với các phần tử hiện có trong danh sách
+        is_duplicate = False
+        for item in current_items:
+            # Chuyển đổi item từ dạng chuỗi JSON thành dict và kiểm tra 'date'
+            existing_item = json.loads(item)  # Chuyển string thành dict
+            if existing_item['date'] == data['date']:  # Kiểm tra xem ngày có trùng không
+                is_duplicate = True  # Nếu trùng, đánh dấu là trùng
+                break  # Dừng vòng lặp khi tìm thấy phần tử trùng
+
+        # Bước 3: Nếu không trùng lặp, thêm phần tử mới vào Redis list
+        if not is_duplicate:
+            # Chuyển data thành chuỗi JSON và thêm vào Redis list
+            redis_client.lpush(key, json.dumps(data))
+            logging.info(f"Đã lưu vào Redis List với key '{key}': {data}")
+        else:
+            return f"Thêm thành công"
+
+    except Exception as e:
+
+        logging.error(f"Lỗi khi lưu vào Redis List: {str(e)}")
+
+
+async def data_mau():
+    gold_data = [
+        {"date": "2025-01-01", "price": 2054.05},
+        {"date": "2025-01-02", "price": 2060.30},
+        {"date": "2025-01-03", "price": 2070.15},
+        {"date": "2025-01-04", "price": 2033.15},
+        {"date": "2025-01-05", "price": 2072.15},
+        {"date": "2025-01-06", "price": 2073.15},
+        {"date": "2025-01-07", "price": 2074.15},
+        {"date": "2025-01-08", "price": 2075.15},
+        {"date": "2025-01-09", "price": 2075.15},
+        {"date": "2025-01-10", "price": 2075.15},
+        {"date": "2025-01-11", "price": 2075.15},
+        {"date": "2025-01-12", "price": 2075.15},
+        {"date": "2025-01-13", "price": 2075.15},
+
+    ]
+    for data_push in gold_data:
+        save_to_redis_list(redis_client, 'Minhdang_list', data_push)
