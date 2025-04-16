@@ -9,4 +9,4 @@ app = FastAPI()
 async def startup_event():
     await data_mau()
 app.include_router(router)
-# Thêm các tuyến được vào app
+# Thêm các tuyến được vào app để rễ quản lý hơn

@@ -9,13 +9,13 @@ class CRUDBase(Generic[ModelType]):
 
     def __init__(self, model: Type[ModelType]):
         self.model = model
-
+#38 nhận được dữ liệu gồm db và data thì nó sẽ sử lý
     def create(self, db: Session, data: dict) -> ModelType:
-        obj = self.model(**data)
+        obj = self.model(**data) #39 cái là cái gì quên luôn rồi
         db.add(obj)
         db.commit()
         db.refresh(obj)
-        return obj
+        return obj#40 return về lại cái data sau khi thêm vào
 
     def get_by_id(self, db: Session, id: int) -> Optional[ModelType]:
         return db.exec(select(self.model).where(self.model.id == id)).first()
