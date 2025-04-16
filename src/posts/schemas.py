@@ -14,6 +14,8 @@ class GoldPriceBase(BaseModel):
 class GoldPriceCreate(GoldPriceBase):
     pass
 
+
+
 class GoldPrice(GoldPriceBase):
     id: int
     price_per_ounce: Decimal

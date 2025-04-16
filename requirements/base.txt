@@ -1,0 +1,6 @@
+Redis
+SQLalchemy
+SQLmodel
+pydantic
+typing
+fastapi
