@@ -36,7 +36,7 @@ async def get_and_update_gold_price(client: httpx.AsyncClient, url: str, headers
         price = Decimal(cached_price) #10 nó sẽ gán cho cái giá từ redis đó ép thành kiểu Decimal
         #11 cách này để tạo một request làm việc song song với những thuọc tính truyền vào fetch_price_api
         task1 = asyncio.create_task(fetch_price_api(client, url, headers, date))  # Request thứ 1
-        await asyncio.sleep(10)#19 khi nó chạy nó sẽ nghỉ 10 giây và trong khi đó thì nhưng việc khác cứ tiếp tục thực hiên
+        await asyncio.sleep(2)#19 khi nó chạy nó sẽ nghỉ 10 giây và trong khi đó thì nhưng việc khác cứ tiếp tục thực hiên
 
         task2 = fetch_price_api(client, url, headers, date)#20 đến request thứ 2
 
@@ -67,6 +67,7 @@ async def get_and_update_gold_price(client: httpx.AsyncClient, url: str, headers
 
 #34 sau khi nhận được giá vàng nó sẽ tính toán
 def calculate_gold_price(price: Decimal):
+
     ounce_to_gram = Decimal('31.1035')
     luong_to_gram = Decimal('37.5')
     price_per_ounce = price * ounce_to_gram
@@ -118,6 +119,12 @@ async def data_mau():
         {"date": "2025-01-11", "price": 2075.15},
         {"date": "2025-01-12", "price": 2075.15},
         {"date": "2025-01-13", "price": 2075.15},
+        {"date": "2025-01-14", "price": 2075.15},
+        {"date": "2025-01-15", "price": 2075.15},
+        {"date": "2025-01-16", "price": 2075.15},
+        {"date": "2025-01-17", "price": 2075.15},
+        {"date": "2025-01-18", "price": 2075.15},
+        {"date": "2025-01-19", "price": 2075.15},
 
     ]
     for data_push in gold_data: # duyệt từng phần tử rồi push lên redis

@@ -1,6 +1,6 @@
 import redis
-
-
+from typing import TypeVar
+import json
 redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
 try:
@@ -18,6 +18,11 @@ def get_price_from_cache(redis_client,key:str):
     if cached_price:# nếu có
         return cached_price
     return None# nếu không thì ra null thôi
+def laydulieuder_save(key:str):
+    cache_save = redis_client.get(key)
+    if cache_save:
+     return json.loads(cache_save)
+    return None
 
 #27 sau khi nhận được những đối số bên kia truyền vào gồm nhưng redis_client, key,value
 def save_price_to_cache(redis_client, key: str, value: str):

@@ -2,11 +2,15 @@
 
 from fastapi import FastAPI
 from src.posts.router import router
+import uvicorn
 from src.posts.service import data_mau
-
+from contextlib import asynccontextmanager
 app = FastAPI()
-@app.on_event("startup")
-async def startup_event():
-    await data_mau()
+
+if __name__ == "__main__":
+    uvicorn.run("src.posts.main:app", host="localhost", port=8000, reload=True)
+
+
+
 app.include_router(router)
 # Thêm các tuyến được vào app để rễ quản lý hơn

@@ -5,6 +5,7 @@ from src.posts.base_crud import CRUDBase
 from datetime import datetime
 
 gold_crud = CRUDBase(models.GoldPrice)
+save_search_gold = CRUDBase(models.Save_search_gold)
 #47 sau khi nhận tham số thì hàm ngày nó sẽ chuyển định dạng tiếp
 def get_gold_prices_in_range(db: Session, start_date: str, end_date: str):
     start_date = datetime.strptime(start_date, "%Y-%m-%d")

@@ -60,6 +60,7 @@ async def get_price(db: Session = Depends(get_db)): # nó sẽ lấy cái sessio
 # 44 Khi mà bấm test lấy dữ liệu sẽ là lấy ở đây , tham số đâu tiên là start_date và end_date và db
 @router.get("/get_price_range/")
 async def get_price_range(start_date: str, end_date: str, db: Session = Depends(get_db)):
+    print("PPPPPPPPPPPPPPPPPPP")
     try: # nếu đúng
         #45 nếu đúng thì nó sẽ ép kiểu start_date và end_date sang định dạng kiểm datetime
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
@@ -122,32 +123,50 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
         logging.error(f"Lỗi khi xử lý yêu cầu: {str(e)}")
         raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
 
-#64 đây là phần search data ,
-# respinse_model là phần  kiểu dữ liệu mà sẽ phải trả về cái đó được pydantic kiểm tra hết dữ liệu các thứ rồi
+
 @router.get("/search_data", response_model=khung_data)
-async def save_date(date: str):#65 truyền giá trị date ro người dùng nhập vào
-    try:# nếu đúng
-        data_new = redis_client.get(date)# 66 lấy giá trị đate mà người dùng nhập vào
-        if data_new: #67 nếu có trong redis
-            duyet_data = json.loads(data_new) # 68 cái hàm loads này nghĩa là từ một json trả về một đối tượng
-            print("Data đã được trả về") # in ra
-            return khung_data(date=duyet_data['date'], price=duyet_data['price']) #69 return ra kết quả nếu như tìm thấy
-    except Exception as e: #70 nếu gặp lỗi thì sẽ nhảy xuống đây
-        logging.info("Không có dữ liệu nào được trả về ")
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date} lỗi là {str(e)}")
+async def search_data(date: str, db: Session = Depends(get_db)):
+    try:
+        logging.info("Chạy vào chức năng search_data")
 
-    gold_minhdang = redis_client.lrange("Minhdang_list", 0, -1) #71 nếu trường hợp không có ngày mà client nhập vào
-    # thì nó sẽ lấy cả danh sách Minhdang_list trở về
+        danhsach_minhdang = redis_client.lrange("Minhdang_list", 0, -1)
+        for timkiem_gold_save in danhsach_minhdang:
+            gold_price_save = json.loads(timkiem_gold_save)
+            try:
+                if gold_price_save['date'] == date:
+                    print("Data đã được trả về từ Redis")
 
-    for timkiem in gold_minhdang: #72 duyệt từng phần tử trong danh sách
-        gold_price = json.loads(timkiem) #73 chuyển từ json sang kiểu đối tượng, còn khi chuyền vào redí thì phải là kiểu json lên khi thao tác sẽ phải chuyển lại
-        try: #74 trường hợp nếu mà có ngày trung với date nhập vào
-            if gold_price['date'] == date:
+                    price = gold_price_save['price']
+                    price_per_ounce, price_per_luong, price_per_gram = calculate_gold_price(price)
 
-                return khung_data(#75 return ra giá trị đó ra lun
-                    date=gold_price['date'],
-                    price=gold_price['price']
-                )
-        except Exception as e:#76 lỗi thì xuốngd dây
-            logging.info("Không tìm thấy cái nào giống trong database hay cache ")
-            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date} và bị lõi này {str(e)}")
+                    # Lưu dữ liệu tìm được vào database
+                    save_search_gold_chill = crud.save_search_gold.create(db, {
+                        "price": price,
+                        "price_per_ounce": price_per_ounce,
+                        "price_per_luong": price_per_luong,
+                        "price_per_gram": price_per_gram
+                    })
+                    logging.info(f"Đã lưu thành công vào database: {save_search_gold_chill}")
+                    return {"price": price, "timestamp": save_search_gold_chill.timestamp}
+            except Exception as e:
+                logging.info(f"Lỗi đầu như sau : {str(e)}")
+
+        # Nếu không tìm thấy trong Redis, tìm kiếm trong cơ sở dữ liệu hoặc API
+        logging.info("Tìm kiếm trong cơ sở dữ liệu hoặc API nếu không có trong Redis")
+        gold_minhdang = redis_client.lrange("Minhdang_list", 0, -1)
+
+        for timkiem in gold_minhdang:
+            gold_price = json.loads(timkiem)
+            try:
+                if gold_price['date'] == date:
+                    return khung_data(
+                        date=gold_price['date'],
+                        price=gold_price['price']
+                    )
+            except Exception as e:
+                logging.info(f"Không tìm thấy dữ liệu cho ngày {date} trong Redis hay cơ sở dữ liệu: {str(e)}")
+                raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date}.")
+
+    except Exception as e:
+        logging.error(f"Lỗi trong khi xử lý yêu cầu: {str(e)}")
+        raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
