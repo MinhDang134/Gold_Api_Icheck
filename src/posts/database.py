@@ -15,13 +15,10 @@ SessionLocal = sessionmaker(autocommit=False,autoflush=False,bind = engine)
 #Base = declarative_base()
 @asynccontextmanager
 async def get_db(app: FastAPI):
-    # Tạo một session mới khi khởi động
-    db = SessionLocal()  # Tạo một session hợp lệ từ SessionLocal
+    db = SessionLocal()
     try:
-        await data_mau()  # Gọi data_mau khi khởi động
-        yield db  # Trả về session để tiếp tục sử dụng trong ứng dụng
+        await data_mau()
+        yield db
     finally:
-        db.close()  # Đảm bảo đóng session khi ứng dụng tắt
-
-# Đăng ký lifespan handler
+        db.close()
 app.add_event_handler("startup", get_db)

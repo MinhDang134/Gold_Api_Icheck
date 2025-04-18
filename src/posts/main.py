@@ -14,10 +14,7 @@ if __name__ == "__main__":
 
 @app.on_event("startup")
 async def startup_event():
-    # Khởi tạo dữ liệu mẫu khi ứng dụng khởi động
     await data_mau()
-
-# Dependency để lấy database session
 def get_db():
     db = SessionLocal()
     try:

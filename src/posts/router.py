@@ -1,12 +1,8 @@
-# src/router.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 import httpx
 import json
-from typing import Type
 from src.posts.Dependecies import get_db
-from src.posts.schemas import khung_data
 from src.posts.service import get_and_update_gold_price, calculate_gold_price
 from src.posts import redis_cache, crud
 from datetime import datetime, timedelta
@@ -17,30 +13,20 @@ from src.posts.redis_cache import redis_client
 router = APIRouter()
 
 @router.post("/get_price/")
-async def get_price(db: Session = Depends(get_db)): # nó sẽ lấy cái session được định nghĩa trong Dependecies để có thể truy cập dư liệu trong database
-    try: # nếu đúng
-        #1 gửi key và redis_client sang cho redix
-        #3 sau khi mà nhận được dữ liệu từ bên redis hay không thì nó sẽ thực hiện lần lượt như sau
-        # và đây là trường hợp nếu đúng
+async def get_price(db: Session = Depends(get_db)):
+    try:
         cached_price = redis_cache.get_price_from_cache(redis_cache.redis_client, "gold_price")# gán cached_price
 
-        api_key = "goldapi-af6o2qsm9f2jcj1-io" # lấy api_key vàng
-        url = f"https://www.goldapi.io/api/XAU/USD"# lấy url vàng
+        api_key = "goldapi-af6o2qsm9f2jcj1-io"
+        url = f"https://www.goldapi.io/api/XAU/USD"
 
         headers = {
-            "x-access-token": api_key # lấy header của vàng
+            "x-access-token": api_key
         }
 
-        async with httpx.AsyncClient() as client: #4 dùng with và async để khi mà thực hiện xong nó sẽ tự đóng
-                        # và httpx.AsyncClient() nó cũng như request trong đồng bộ ấy nó cũng cấp phương thức get,post....
-            #5 tiếp tục lấy giá vàng khi chuyền tất cả thông tin cần vào hàm dưới
+        async with httpx.AsyncClient() as client:
             price = await get_and_update_gold_price(client, url, headers, cached_price)
-            #32 sau khi đã có giá vàng dược return về rồi thì...
-
-            #33 truyền price vào hàm calculate_gold_price để mà cho nó tính tiền
             price_per_ounce, price_per_luong, price_per_gram = calculate_gold_price(price)
-            #36 sau khi nhận được giá vàng rồi nó sẽ gán lần lượt cho từng giá trị
-            #37 khi này đã có đủ thông tin muốn tạo một value mới thì mình gọi create trong base_crud và truyền dữ liệu vào
             new_gold_price = crud.gold_crud.create(db, {
                 "price": price,
                 "price_per_ounce": price_per_ounce,
@@ -85,11 +71,11 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
                 ],
                 'save_search_gold': [
                     {
-                        "price": rg['price'],  # Truy cập khóa 'price' thay vì thuộc tính
-                        "price_per_ounce": rg['price_per_ounce'],  # Truy cập khóa 'price_per_ounce'
-                        "price_per_luong": rg['price_per_luong'],  # Truy cập khóa 'price_per_luong'
-                        "price_per_gram": rg['price_per_gram'],  # Truy cập khóa 'price_per_gram'
-                        "timestamp": rg['timestamp']  # Truy cập khóa 'timestamp'
+                        "price": rg['price'],
+                        "price_per_ounce": rg['price_per_ounce'],
+                        "price_per_luong": rg['price_per_luong'],
+                        "price_per_gram": rg['price_per_gram'],
+                        "timestamp": rg['timestamp']
                     } for rg in rang_cache
                 ]
             }
@@ -166,7 +152,6 @@ async def search_data(date: str, db: Session = Depends(get_db)):
                         "price_per_gram": price_per_gram
                     }
 
-                    # Lưu vào database sử dụng crud
                     try:
                         save_search_gold_chill = crud.save_search_gold.create(db=db, data=save_data)
                         logging.info(f"Đã lưu thành công vào database: {save_search_gold_chill}")
