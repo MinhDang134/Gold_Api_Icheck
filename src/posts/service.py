@@ -76,58 +76,61 @@ def calculate_gold_price(price: Decimal):
     return price_per_ounce, price_per_luong, price
 
 
-def save_to_redis_list(redis_client, key, data):
+async def save_to_redis_list(redis_client, key, data):
     try:
-        # Bước 1: Lấy tất cả các phần tử hiện có trong Redis list
-        current_items = redis_client.lrange(key, 0, -1)  # Get all items from the list
+        # Kiểm tra dữ liệu trùng lặp
+        current_items = redis_client.lrange(key, 0, -1)
 
-        # Bước 2: Kiểm tra xem phần tử mới đã có trong list chưa
-        # Chúng ta sẽ so sánh ngày của phần tử mới với các phần tử hiện có trong danh sách
-        is_duplicate = False
+        # Kiểm tra trùng lặp
         for item in current_items:
-            # Chuyển đổi item từ dạng chuỗi JSON thành dict và kiểm tra 'date'
-            existing_item = json.loads(item)  # Chuyển string thành dict
-            if existing_item['date'] == data['date']:  # Kiểm tra xem ngày có trùng không
-                is_duplicate = True  # Nếu trùng, đánh dấu là trùng
-                break  # Dừng vòng lặp khi tìm thấy phần tử trùng
+            existing_item = json.loads(item)
+            if existing_item['date'] == data['date']:
+                logging.info(f"Dữ liệu cho ngày {data['date']} đã tồn tại")
+                return False
 
-        # Bước 3: Nếu không trùng lặp, thêm phần tử mới vào Redis list
-        if not is_duplicate:
-            # Chuyển data thành chuỗi JSON và thêm vào Redis list
-            redis_client.lpush(key, json.dumps(data))
-            logging.info(f"Đã lưu vào Redis List với key '{key}': {data}")
-        else:
-            return f"Thêm thành công"
-
+        # Thêm dữ liệu mới
+        redis_client.lpush(key, json.dumps(data))
+        logging.info(f"Đã thêm dữ liệu cho ngày {data['date']}")
+        return True
     except Exception as e:
-
-        logging.error(f"Lỗi khi lưu vào Redis List: {str(e)}")
-
-
+        logging.error(f"Lỗi khi thêm dữ liệu vào Redis: {str(e)}")
+        return False
 
 
 async def data_mau():
-    gold_data = [ # tạo ra một bảng dữ liệu sẵn
-        {"date": "2025-01-01", "price": 2054.05},
-        {"date": "2025-01-02", "price": 2060.30},
-        {"date": "2025-01-03", "price": 2070.15},
-        {"date": "2025-01-04", "price": 2033.15},
-        {"date": "2025-01-05", "price": 2072.15},
-        {"date": "2025-01-06", "price": 2073.15},
-        {"date": "2025-01-07", "price": 2074.15},
-        {"date": "2025-01-08", "price": 2075.15},
-        {"date": "2025-01-09", "price": 2075.15},
-        {"date": "2025-01-10", "price": 2075.15},
-        {"date": "2025-01-11", "price": 2075.15},
-        {"date": "2025-01-12", "price": 2075.15},
-        {"date": "2025-01-13", "price": 2075.15},
-        {"date": "2025-01-14", "price": 2075.15},
-        {"date": "2025-01-15", "price": 2075.15},
-        {"date": "2025-01-16", "price": 2075.15},
-        {"date": "2025-01-17", "price": 2075.15},
-        {"date": "2025-01-18", "price": 2075.15},
-        {"date": "2025-01-19", "price": 2075.15},
+    try:
+        # Xóa dữ liệu cũ trong Redis list (nếu có)
+        redis_client.delete('Minhdang_list')
 
-    ]
-    for data_push in gold_data: # duyệt từng phần tử rồi push lên redis
-        save_to_redis_list(redis_client, 'Minhdang_list', data_push)
+        gold_data = [
+            {"date": "2025-01-01", "price": 2001.05},
+            {"date": "2025-01-02", "price": 2002.30},
+            {"date": "2025-01-03", "price": 2003.15},
+            {"date": "2025-01-04", "price": 2004.15},
+            {"date": "2025-01-05", "price": 2005.15},
+            {"date": "2025-01-06", "price": 2006.15},
+            {"date": "2025-01-07", "price": 2007.15},
+            {"date": "2025-01-08", "price": 2008.15},
+            {"date": "2025-01-09", "price": 2009.15},
+            {"date": "2025-01-10", "price": 2010.15},
+            {"date": "2025-01-11", "price": 2011.15},
+            {"date": "2025-01-12", "price": 2012.15},
+            {"date": "2025-01-13", "price": 2013.15},
+            {"date": "2025-01-14", "price": 2014.15},
+            {"date": "2025-01-15", "price": 2015.15},
+            {"date": "2025-01-16", "price": 2016.15},
+            {"date": "2025-01-17", "price": 2017.15},
+            {"date": "2025-01-18", "price": 2018.15},
+            {"date": "2025-01-19", "price": 2019.15},
+            {"date": "2025-01-20", "price": 2020.15},
+        ]
+
+        # Thêm dữ liệu vào Redis
+        for data in gold_data:
+            await save_to_redis_list(redis_client, 'Minhdang_list', data)
+
+        logging.info("Đã khởi tạo dữ liệu mẫu trong Redis thành công")
+        return True
+    except Exception as e:
+        logging.error(f"Lỗi khi khởi tạo dữ liệu mẫu: {str(e)}")
+        return False

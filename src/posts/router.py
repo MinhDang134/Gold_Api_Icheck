@@ -141,49 +141,54 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
         #     return {"gold_prices": all_prices}#64 in ra cái bảng rỗng đó
 
 
-
-@router.get("/search_data", response_model=khung_data)
+@router.get("/search_data")
 async def search_data(date: str, db: Session = Depends(get_db)):
     try:
         logging.info("Chạy vào chức năng search_data")
 
+        # Tìm trong Redis
         danhsach_minhdang = redis_client.lrange("Minhdang_list", 0, -1)
         for timkiem_gold_save in danhsach_minhdang:
             gold_price_save = json.loads(timkiem_gold_save)
             try:
                 if gold_price_save['date'] == date:
-                    print("Data đã được trả về từ Redis")
+                    logging.info("Data đã được trả về từ Redis")
 
-                    price = gold_price_save['price']
+                    # Lấy giá và tính toán
+                    price = Decimal(str(gold_price_save['price']))  # Convert to Decimal
                     price_per_ounce, price_per_luong, price_per_gram = calculate_gold_price(price)
 
-                    # Lưu dữ liệu tìm được vào database
-                    save_search_gold_chill = crud.save_search_gold.create(db, {
+                    # Tạo dict với dữ liệu cần lưu
+                    save_data = {
                         "price": price,
                         "price_per_ounce": price_per_ounce,
                         "price_per_luong": price_per_luong,
                         "price_per_gram": price_per_gram
-                    })
-                    logging.info(f"Đã lưu thành công vào database: {save_search_gold_chill}")
-                    return {"price": price, "timestamp": save_search_gold_chill.timestamp}
-            except Exception as e:
-                logging.info(f"Lỗi đầu như sau : {str(e)}")
+                    }
 
-        # Nếu không tìm thấy trong Redis, tìm kiếm trong cơ sở dữ liệu hoặc API
-        logging.info("Tìm kiếm trong cơ sở dữ liệu hoặc API nếu không có trong Redis")
-        gold_minhdang = redis_client.lrange("Minhdang_list", 0, -1)
+                    # Lưu vào database sử dụng crud
+                    try:
+                        save_search_gold_chill = crud.save_search_gold.create(db=db, data=save_data)
+                        logging.info(f"Đã lưu thành công vào database: {save_search_gold_chill}")
 
-        for timkiem in gold_minhdang:
-            gold_price = json.loads(timkiem)
-            try:
-                if gold_price['date'] == date:
-                    return khung_data(
-                        date=gold_price['date'],
-                        price=gold_price['price']
-                    )
+                        return {
+                            "date": gold_price_save['date'],
+                            "price": float(price),
+                            "price_per_ounce": float(price_per_ounce),
+                            "price_per_luong": float(price_per_luong),
+                            "price_per_gram": float(price_per_gram),
+                            "timestamp": save_search_gold_chill.timestamp
+                        }
+                    except Exception as db_error:
+                        logging.error(f"Lỗi khi lưu vào database: {str(db_error)}")
+                        raise HTTPException(status_code=500, detail="Lỗi khi lưu dữ liệu vào database")
+
             except Exception as e:
-                logging.info(f"Không tìm thấy dữ liệu cho ngày {date} trong Redis hay cơ sở dữ liệu: {str(e)}")
-                raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date}.")
+                logging.error(f"Lỗi khi xử lý dữ liệu Redis: {str(e)}")
+                continue
+
+        # Nếu không tìm thấy dữ liệu
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho ngày {date}")
 
     except Exception as e:
         logging.error(f"Lỗi trong khi xử lý yêu cầu: {str(e)}")
