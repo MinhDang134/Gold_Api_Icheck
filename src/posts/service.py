@@ -104,6 +104,8 @@ def save_to_redis_list(redis_client, key, data):
         logging.error(f"Lỗi khi lưu vào Redis List: {str(e)}")
 
 
+
+
 async def data_mau():
     gold_data = [ # tạo ra một bảng dữ liệu sẵn
         {"date": "2025-01-01", "price": 2054.05},

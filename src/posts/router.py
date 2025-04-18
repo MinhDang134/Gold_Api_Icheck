@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 import httpx
 import json
+from typing import Type
 from src.posts.Dependecies import get_db
 from src.posts.schemas import khung_data
 from src.posts.service import get_and_update_gold_price, calculate_gold_price
@@ -56,72 +57,89 @@ async def get_price(db: Session = Depends(get_db)): # nó sẽ lấy cái sessio
     except HTTPException as http_exc:
         logging.error(f"Đã xảy ra lỗi HTTP: {http_exc.detail}")
         raise http_exc
-
-# 44 Khi mà bấm test lấy dữ liệu sẽ là lấy ở đây , tham số đâu tiên là start_date và end_date và db
 @router.get("/get_price_range/")
 async def get_price_range(start_date: str, end_date: str, db: Session = Depends(get_db)):
-    print("PPPPPPPPPPPPPPPPPPP")
-    try: # nếu đúng
-        #45 nếu đúng thì nó sẽ ép kiểu start_date và end_date sang định dạng kiểm datetime
+    try:
+        # Chuyển đổi start_date và end_date thành datetime
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
-        #46 sau khi có điểm đầu và điểm cuối rồi thì sẽ chuyển cả 3 parameter cho get_gold_prices_in_range
+
+        # Lấy dữ liệu từ cơ sở dữ liệu và Redis
         gold_prices_range = crud.get_gold_prices_in_range(db, start_date, end_date)
-        #51 sau khi có được danh sách thì ta sẽ làm như bên dưới
+        rang_cache = redis_cache.rang_save_date_cache(redis_cache.redis_client, 'Minhdang_list', start_date, end_date)
+        chill =json.dumps(rang_cache)
+        print(type(chill))
 
-        if gold_prices_range: #52 nếu đúng thì nó sẽ duyệt tất cả những phần tử được trả về ra
-            return {"gold_prices": [
-                {
-                    "id": gp.id,
-                    "price": gp.price,
-                    "price_per_ounce": gp.price_per_ounce,
-                    "price_per_luong": gp.price_per_luong,
-                    "price_per_gram": gp.price_per_gram,
-                    "timestamp": gp.timestamp
-                } for gp in gold_prices_range
-            ]}
-        #52 nếu không có thì nó sẽ lấy trong api
-        api_key = "goldapi-af6o2qsm9f2jcj1-io" # lấy key
-        url = "https://www.goldapi.io/api/XAU/USD" # lấy url
+        # Nếu có dữ liệu từ Redis và Database
+        if gold_prices_range or rang_cache:
+            return {
+                "gold_prices": [
+                    {
+                        "id": gp.id,
+                        "price": gp.price,
+                        "price_per_ounce": gp.price_per_ounce,
+                        "price_per_luong": gp.price_per_luong,
+                        "price_per_gram": gp.price_per_gram,
+                        "timestamp": gp.timestamp
+                    } for gp in gold_prices_range
+                ],
+                'save_search_gold': [
+                    {
+                        "price": rg['price'],  # Truy cập khóa 'price' thay vì thuộc tính
+                        "price_per_ounce": rg['price_per_ounce'],  # Truy cập khóa 'price_per_ounce'
+                        "price_per_luong": rg['price_per_luong'],  # Truy cập khóa 'price_per_luong'
+                        "price_per_gram": rg['price_per_gram'],  # Truy cập khóa 'price_per_gram'
+                        "timestamp": rg['timestamp']  # Truy cập khóa 'timestamp'
+                    } for rg in rang_cache
+                ]
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Không có dữ liệu trong phạm vi ngày đã cho.")
 
-        headers = {# lấy header
-            "x-access-token": api_key
-        }
-
-        async with httpx.AsyncClient() as client: #53 tạo một cái để truy xuất post,get,put các thứ tiếp
-            all_prices = [] #54 tạo một mảng rỗng
-            current_date = start_date_obj  #55 gán giá trị bắt đầu cho current_date
-
-            while current_date <= end_date_obj: #56 nếu mà current_date nhỏ hơn hoặc bằng end_date_obj thì đúng
-                date_str = current_date.strftime("%Y-%m-%d") #57 thay đổi kiểu dạng dữ liệu
-                #58 lấy dữ liệu trả về bên trong get_and_update_gold_price
-                price = await get_and_update_gold_price(client, url, headers, None)
-                #59 rồi nó cũng sẽ trả về giá rôì dùng cái giá đó thôi
-
-                formatted_price = str(price)
-                new_gold_price = crud.gold_crud.create(db, { #60 tạo một bảng dữ liệu mới cùng create của base_crud
-                    "price": price,
-                    "price_per_ounce": price * Decimal('31.1035'),
-                    "price_per_luong": price * Decimal('37.5'),
-                    "price_per_gram": price
-                })
-
-                all_prices.append({ #62 áp thông tin vào cái mảng rỗng
-                    "date": date_str,
-                    "price": price,
-                    "timestamp": new_gold_price.timestamp
-                })
-
-                current_date += timedelta(days=1) #63 Ví dụ nếu current_date là 2025-01-04, sau khi thực thi câu lệnh này,
-                                                  # giá trị của current_date sẽ là 2025-01-05.
-
-            return {"gold_prices": all_prices}#64 in ra cái bảng rỗng đó
-
-    except ValueError as e:# kiểm tra lỗi các thứ
-        raise HTTPException(status_code=400, detail="Ngày tháng không hợp lệ. Bạn hãy nhập theo định dạng YYYY-MM-DD.")
-    except Exception as e:#Kiểm tra lỗi cái thứ
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Ngày tháng không hợp lệ. Bạn hãy nhập theo định dạng YYYY-MM-DD.{str(e)} ")
+    except Exception as e:
         logging.error(f"Lỗi khi xử lý yêu cầu: {str(e)}")
         raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
+
+
+#52 nếu không có thì nó sẽ lấy trong api
+        # api_key = "goldapi-af6o2qsm9f2jcj1-io" # lấy key
+        # url = "https://www.goldapi.io/api/XAU/USD" # lấy url
+        #
+        # headers = {# lấy header
+        #     "x-access-token": api_key
+        # }
+        #
+        # async with httpx.AsyncClient() as client: #53 tạo một cái để truy xuất post,get,put các thứ tiếp
+        #     all_prices = [] #54 tạo một mảng rỗng
+        #     current_date = start_date_obj  #55 gán giá trị bắt đầu cho current_date
+        #
+        #     while current_date <= end_date_obj: #56 nếu mà current_date nhỏ hơn hoặc bằng end_date_obj thì đúng
+        #         date_str = current_date.strftime("%Y-%m-%d") #57 thay đổi kiểu dạng dữ liệu
+        #         #58 lấy dữ liệu trả về bên trong get_and_update_gold_price
+        #         price = await get_and_update_gold_price(client, url, headers, None)
+        #         #59 rồi nó cũng sẽ trả về giá rôì dùng cái giá đó thôi
+        #
+        #         formatted_price = str(price)
+        #         new_gold_price = crud.gold_crud.create(db, { #60 tạo một bảng dữ liệu mới cùng create của base_crud
+        #             "price": price,
+        #             "price_per_ounce": price * Decimal('31.1035'),
+        #             "price_per_luong": price * Decimal('37.5'),
+        #             "price_per_gram": price
+        #         })
+        #
+        #         all_prices.append({ #62 áp thông tin vào cái mảng rỗng
+        #             "date": date_str,
+        #             "price": price,
+        #             "timestamp": new_gold_price.timestamp
+        #         })
+        #
+        #         current_date += timedelta(days=1) #63 Ví dụ nếu current_date là 2025-01-04, sau khi thực thi câu lệnh này,
+        #                                           # giá trị của current_date sẽ là 2025-01-05.
+        #
+        #     return {"gold_prices": all_prices}#64 in ra cái bảng rỗng đó
+
 
 
 @router.get("/search_data", response_model=khung_data)
