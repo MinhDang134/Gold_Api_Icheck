@@ -8,7 +8,7 @@ from fastapi import HTTPException
 import asyncio
 import json
 from src.posts.redis_cache import redis_client
-from src.posts import redis_cache
+from src.posts import redis_cache, models
 
 logging.basicConfig(level=logging.INFO)
 async def fetch_price_api(client: httpx.AsyncClient, url: str, headers: dict, date: str):
@@ -67,7 +67,61 @@ def calculate_gold_price(price: Decimal):
     price_per_ounce = price * ounce_to_gram
     price_per_luong = price * luong_to_gram
     return price_per_ounce, price_per_luong, price
-#
+
+
+async def fetch_price_api_api(date: str):
+    """Lấy giá vàng từ GoldAPI.io"""
+    api_key = "goldapi-3dwn9sm9pcamod-io"
+    url = f"https://www.goldapi.io/api/XAU/USD/{date}"
+    headers = {
+        "x-access-token": api_key,
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            logging.info(f"API Response Status: {response.status_code}")
+            logging.info(f"API Response: {response.text}")
+
+            if response.status_code == 200:
+                data = response.json()
+                price_per_ounce = Decimal(str(data.get('price', 0)))
+                price_per_gram = price_per_ounce / Decimal('31.1035')
+                price_per_luong = price_per_gram * Decimal('37.5')
+
+                new_price = models.GoldPrice(
+                    price=price_per_ounce,
+                    price_per_ounce=price_per_ounce,
+                    price_per_luong=price_per_luong,
+                    price_per_gram=price_per_gram,
+                    timestamp=datetime.strptime(date, "%Y-%m-%d")
+                )
+                return new_price
+            elif response.status_code == 403:
+                logging.error("API Key không hợp lệ hoặc đã hết hạn")
+                raise HTTPException(
+                    status_code=403,
+                    detail="API Key không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lại API key."
+                )
+            elif response.status_code == 429:
+                logging.error("Đã vượt quá giới hạn gọi API")
+                raise HTTPException(
+                    status_code=429,
+                    detail="Đã vượt quá giới hạn gọi API. Vui lòng thử lại sau."
+                )
+            else:
+                logging.error(f"Lỗi khi gọi API: {response.text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Không thể lấy dữ liệu giá vàng cho ngày {date}. Vui lòng thử lại sau."
+                )
+    except httpx.RequestError as e:
+        logging.error(f"Lỗi kết nối API: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Lỗi kết nối tới API: {str(e)}"
+        )
 #
 # async def save_to_redis_list(redis_client, key, data):
 #     try:

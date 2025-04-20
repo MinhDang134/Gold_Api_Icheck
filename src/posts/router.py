@@ -15,7 +15,8 @@ from src.posts.Dependecies import get_db # import getdb
 from src.posts.crud import get_data_indatabase
 
 from src.posts.models import GoldPrice
-from src.posts.service import get_and_update_gold_price, calculate_gold_price # import nhưng phương thức cần trong service cần dùng
+from src.posts.service import get_and_update_gold_price, calculate_gold_price, \
+    fetch_price_api, fetch_price_api_api  # import nhưng phương thức cần trong service cần dùng
 from src.posts import redis_cache, crud # import redis và crud
 from datetime import datetime, timedelta # Khai báo thư viện datime để gán dữ liệu các thứ
 from decimal import Decimal # khái báo thư viên decimal để làm rõ những số thập phân
@@ -25,41 +26,29 @@ from src.posts.redis_cache import redis_client, get_price_from_cache  # khai bá
 router = APIRouter() # Khai báo cái router từ ApiRouter luồng
 # Nó sẽ có tác dụng nhóm những router lại thành một cái để dễ xử lý , trong sang bên main mà gọi
 
-# khai báo phương thức post trong router và có kiểu là get_price
 @router.post("/get_price/")
-# 1 khái báo hàm get_price và db bên trong để quản lý cơ sở dữ liệun
 async def get_price(db: Session = Depends(get_db)):
-    try:# 2 nếu dúng
-        cached_price = redis_cache.get_price_from_cache(redis_cache.redis_client, "gold_price")# gán cached_price
-        # 3 để láy giá vàng từ cache nếu có sẽ trả về cached_price , truyền vào là redis và key của nó là gold_price
-        api_key = "goldapi-af6o2qsm9f2jcj1-io" # khai báo api
-        url = f"https://www.goldapi.io/api/XAU/USD" # khai báo link url
-
+    try:
+        cached_price = redis_cache.get_price_from_cache(redis_client, "gold_price")
+        api_key = "goldapi-3dwn9sm9pcamod-io"
+        url = f"https://www.goldapi.io/api/XAU/USD"
         headers = {
-            "x-access-token": api_key # Khai báo phân header
+            "x-access-token": api_key
         }
 
-        async with httpx.AsyncClient() as client: #4 async with : có tác dụng là khi xong cái phần này nó sẽ tự đóng
-            #4.1 giúp gửi những yêu cầu bất đồng bộ mà không bị đóng app
+        async with httpx.AsyncClient() as client:
             price = await get_and_update_gold_price(client, url, headers, cached_price)
-            #4.2 truyền các tham số vào gồm client , url , headers , chached_price
-            #4.25 bây giờ gán từng giá trị khi truyền price vào cho một hàm khác tính toán rồi trả về lần lượt
             price_per_ounce, price_per_luong, price_per_gram = calculate_gold_price(price)
 
-            # gọi đến phương thưc create tạo bảng và app dữ liệu thông qua class crud và hàm gold_crud và phươngt thực create
-            # tac huyền db và dâta vào rồi bên kia sẽ sử lý tự add vào cơ sở dữ liệu
             new_gold_price = crud.gold_crud.create(db, {
                 "price": price,
                 "price_per_ounce": price_per_ounce,
                 "price_per_luong": price_per_luong,
                 "price_per_gram": price_per_gram
             })
-            # sau khi nhận được dữ liệu rồi thì sẽ in ra giá của cái dữ liệu mới đó
             logging.info(f"Lưu giá vàng vào database: {price}")
-            #in ra giá và thời gian cho database
             return {"price": price, "timestamp": new_gold_price.timestamp}
 
-    #43 lỗi thì nhảy vào đây mà hiển thị
     except HTTPException as http_exc:
         logging.error(f"Đã xảy ra lỗi HTTP: {http_exc.detail}")
         raise http_exc
@@ -154,6 +143,13 @@ async def search_data(date: str, db: Session = Depends(get_db)):
         # Validate date format
         try:
             kiemtra_date = datetime.strptime(date, "%Y-%m-%d").date()
+            current_date = datetime.now().date()
+            # Kiểm tra ngày có trong tương lai không (chỉ so sánh ngày, không so sánh giờ)
+            if kiemtra_date > current_date:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Không thể lấy giá vàng cho ngày trong tương lai. Vui lòng chọn ngày hiện tại hoặc trong quá khứ."
+                )
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Please use YYYY-MM-DD format")
 
@@ -176,44 +172,68 @@ async def search_data(date: str, db: Session = Depends(get_db)):
         database_save = get_data_indatabase(db, date)
         logging.info(f"Data from database: {database_save}")
 
-        if database_save:
-            result = {
-                'date': date,
-                'gold_prices': [{
-                    "id": ldl.id,
-                    "price": str(ldl.price),
-                    "price_per_ounce": str(ldl.price_per_ounce),
-                    "price_per_luong": str(ldl.price_per_luong),
-                    "price_per_gram": str(ldl.price_per_gram),
-                    "timestamp": ldl.timestamp.isoformat() if ldl.timestamp else None
-                } for ldl in database_save]
-            }
+        if not database_save:
+            # If not in database, fetch from API
+            logging.info("Fetching data from GoldAPI.io")
+            try:
+                api_data = await fetch_price_api_api(date)
+                if api_data:
+                    # Save to database
+                    db.add(api_data)
+                    db.commit()
+                    db.refresh(api_data)
+                    database_save = [api_data]
+                    logging.info("Data fetched from API and saved to database")
+                else:
+                    raise HTTPException(status_code=404, detail="Could not fetch gold price data")
+            except HTTPException as api_error:
+                logging.error(f"API Error: {str(api_error)}")
+                raise api_error
+            except Exception as e:
+                logging.error(f"Error fetching from API: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Error fetching gold price data: {str(e)}")
 
-            # Increment search count in PostgreSQL
-            search_count = crud.increment_search_count(db, date)
-            logging.info(f"Search count for {date}: {search_count}")
+        if not database_save or not any(price.price > 0 for price in database_save):
+            raise HTTPException(
+                status_code=404,
+                detail="Không tìm thấy dữ liệu giá vàng cho ngày này hoặc giá vàng không hợp lệ"
+            )
 
-            if search_count >= 10:
-                # Save to Redis Minhdang_list if search count >= 10
-                try:
-                    # Convert result to JSON string
-                    json_data = json.dumps(result)
-                    # Add to Minhdang_list
-                    redis_client.lpush("Minhdang_list", json_data)
-                    logging.info(f"Data saved to Redis Minhdang_list for date: {date}")
-                except Exception as cache_error:
-                    logging.warning(f"Failed to save to Redis: {str(cache_error)}")
-            else:
-                logging.info(f"Not saving to Redis yet (search count: {search_count})")
+        result = {
+            'date': date,
+            'gold_prices': [{
+                "id": ldl.id,
+                "price": str(ldl.price),
+                "price_per_ounce": str(ldl.price_per_ounce),
+                "price_per_luong": str(ldl.price_per_luong),
+                "price_per_gram": str(ldl.price_per_gram),
+                "timestamp": ldl.timestamp.isoformat() if ldl.timestamp else None
+            } for ldl in database_save if ldl.price > 0]  # Only include prices greater than 0
+        }
 
-            return result
+        # Increment search count in PostgreSQL
+        search_count = crud.increment_search_count(db, date)
+        logging.info(f"Search count for {date}: {search_count}")
+
+        if search_count >= 10:
+            # Save to Redis Minhdang_list if search count >= 10
+            try:
+                # Convert result to JSON string
+                json_data = json.dumps(result)
+                # Add to Minhdang_list
+                redis_client.lpush("Minhdang_list", json_data)
+                logging.info(f"Data saved to Redis Minhdang_list for date: {date}")
+            except Exception as cache_error:
+                logging.warning(f"Failed to save to Redis: {str(cache_error)}")
         else:
-            logging.info("No data found in database")
-            raise HTTPException(status_code=404, detail="No data found for the specified date")
+            logging.info(f"Not saving to Redis yet (search count: {search_count})")
+
+        return result
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logging.error(f"Error in search_data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/clear_redis")
 async def clear_redis():
