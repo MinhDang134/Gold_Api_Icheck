@@ -138,43 +138,28 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
         #     return {"gold_prices": all_prices}#64 in ra cái bảng rỗng đó
 
 @router.get("/search_data")
-async def search_data(date: str, db: Session = Depends(get_db)):
-    try:
-        # Validate date format
-        try:
-            kiemtra_date = datetime.strptime(date, "%Y-%m-%d").date()
-            current_date = datetime.now().date()
-            # Kiểm tra ngày có trong tương lai không (chỉ so sánh ngày, không so sánh giờ)
-            if kiemtra_date > current_date:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Không thể lấy giá vàng cho ngày trong tương lai. Vui lòng chọn ngày hiện tại hoặc trong quá khứ."
-                )
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Please use YYYY-MM-DD format")
-
-        # First try to get data from Redis Minhdang_list
-        try:
-            # Get all items from Minhdang_list
-            cache_items = redis_client.lrange("Minhdang_list", 0, -1)
+# router này là đường dẫn để phân biệt với cái router khác
+async def search_data(date: str, db: Session = Depends(get_db)): # tạo ra một hàm bất đồng bộ tên là search_data
+    # truyền date db vào từ cái section
+    try: # nếu đúng
+        try: # nếu đúng
+            cache_items = redis_client.lrange("Minhdang_list", 0, -1) # lấy toàn bộ dữ liệu từ key cache_items nếu có
             for item in cache_items:
                 try:
                     item_data = json.loads(item)
                     if item_data.get('date') == date:
-                        logging.info("Data found in Redis Minhdang_list")
+                        logging.info("Dữ liệu đã được thêm vào trong redis")
                         return item_data
                 except json.JSONDecodeError:
                     continue
         except Exception as cache_error:
-            logging.warning(f"Redis cache error: {str(cache_error)}")
+            logging.warning(f"lỗi redis: {str(cache_error)}")
 
-        # If not in Redis, query database
         database_save = get_data_indatabase(db, date)
-        logging.info(f"Data from database: {database_save}")
+        logging.info(f"Lấy dữ liệu từ database: {database_save}")
 
         if not database_save:
-            # If not in database, fetch from API
-            logging.info("Fetching data from GoldAPI.io")
+            logging.info("Vào đây là lấy giá trong database")
             try:
                 api_data = await fetch_price_api_api(date)
                 if api_data:
@@ -183,15 +168,15 @@ async def search_data(date: str, db: Session = Depends(get_db)):
                     db.commit()
                     db.refresh(api_data)
                     database_save = [api_data]
-                    logging.info("Data fetched from API and saved to database")
+                    logging.info("lấy dữ liệu từ api rồi lưu vào database")
                 else:
-                    raise HTTPException(status_code=404, detail="Could not fetch gold price data")
+                    raise HTTPException(status_code=404, detail="Không thể lấy giá vàng từ api")
             except HTTPException as api_error:
-                logging.error(f"API Error: {str(api_error)}")
+                logging.error(f"lỗi api như sau : {str(api_error)}")
                 raise api_error
             except Exception as e:
-                logging.error(f"Error fetching from API: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Error fetching gold price data: {str(e)}")
+                logging.error(f"lỗi lấy dữ liệu từ API: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Không tìm thấy dữ liệu giá vàng cho ngày này hoặc giá vàng không hợp lệ: {str(e)}")
 
         if not database_save or not any(price.price > 0 for price in database_save):
             raise HTTPException(
@@ -211,46 +196,45 @@ async def search_data(date: str, db: Session = Depends(get_db)):
             } for ldl in database_save if ldl.price > 0]  # Only include prices greater than 0
         }
 
-        # Increment search count in PostgreSQL
+
         search_count = crud.increment_search_count(db, date)
         logging.info(f"Search count for {date}: {search_count}")
 
         if search_count >= 10:
-            # Save to Redis Minhdang_list if search count >= 10
+
             try:
-                # Convert result to JSON string
+
                 json_data = json.dumps(result)
-                # Add to Minhdang_list
+
                 redis_client.lpush("Minhdang_list", json_data)
-                logging.info(f"Data saved to Redis Minhdang_list for date: {date}")
+                logging.info(f"Lưu dữ liệu vào redis tên key là Minhdang_list: {date}")
             except Exception as cache_error:
-                logging.warning(f"Failed to save to Redis: {str(cache_error)}")
+                logging.warning(f"Lấy dữ liệu thất bại từ redis: {str(cache_error)}")
         else:
-            logging.info(f"Not saving to Redis yet (search count: {search_count})")
+            logging.info(f"Không lưu dữ liệu (search count: {search_count})")
 
         return result
     except HTTPException as he:
         raise he
     except Exception as e:
-        logging.error(f"Error in search_data: {str(e)}")
+        logging.error(f"lỗi lấy dữ liệu từ search data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/clear_redis")
 async def clear_redis():
     try:
-        # Lấy danh sách tất cả các key
         all_keys = redis_client.keys("*")
-        logging.info(f"Found {len(all_keys)} keys to delete")
+        logging.info(f"số  {len(all_keys)} keys bị xóa là")
 
         # Xóa từng key
         for key in all_keys:
             redis_client.delete(key)
-            logging.info(f"Deleted key: {key}")
+            logging.info(f"Xóa key: {key}")
 
-        return {"message": f"Successfully deleted {len(all_keys)} keys from Redis"}
+        return {"message": f"Xóa thành công {len(all_keys)} keys từ redis"}
     except Exception as e:
-        logging.error(f"Error clearing Redis: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error clearing Redis: {str(e)}")
+        logging.error(f"Lỗi xóa redis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi Xóa redis: {str(e)}")
 
 
 
