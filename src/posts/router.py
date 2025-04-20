@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException # import từ thư viện fastapi impỏt Apirouter để mà thực hiện quản lý các router để quản lý cái luồng chạy dễ hơn
 # Depends : giúp chỉ đến tái sử dụng lại code, khi mà một đoạn code nào đó phải dùng trong những router
 # HttpException : Thực hiện là khi mà em muốn hiển thị lỗi, hoặc là trang thái của doạn đó em có thể dùng cái này để mà hiển thị lỗi ra
@@ -10,12 +12,15 @@ import httpx
 import json
 # thuộc tính json này có thể cho loads và dumps , load từ json thành đối tượng , dumps từ đối tượng thành json
 from src.posts.Dependecies import get_db # import getdb
+from src.posts.crud import get_data_indatabase
+
+from src.posts.models import GoldPrice
 from src.posts.service import get_and_update_gold_price, calculate_gold_price # import nhưng phương thức cần trong service cần dùng
 from src.posts import redis_cache, crud # import redis và crud
 from datetime import datetime, timedelta # Khai báo thư viện datime để gán dữ liệu các thứ
 from decimal import Decimal # khái báo thư viên decimal để làm rõ những số thập phân
 import logging # hiển thị ra lỗi
-from src.posts.redis_cache import redis_client # khai báo cái đường dẫn có localhost port va db
+from src.posts.redis_cache import redis_client, get_price_from_cache  # khai báo cái đường dẫn có localhost port va db
 
 router = APIRouter() # Khai báo cái router từ ApiRouter luồng
 # Nó sẽ có tác dụng nhóm những router lại thành một cái để dễ xử lý , trong sang bên main mà gọi
@@ -143,31 +148,89 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
         #
         #     return {"gold_prices": all_prices}#64 in ra cái bảng rỗng đó
 
-# phương thức search data theo ngày và lưu vào database
 @router.get("/search_data")
-# truyền vào dữ liệu date cho ngừơi dùng nhập và db : database để có thể tương tác
 async def search_data(date: str, db: Session = Depends(get_db)):
     try:
-        cache_save = redis_cache.get_price_from_cache(redis_cache.redis_client,"Minhdang_list")
-        database_save = crud.get_data_indatabase(db,date)
-        logging.info(f"Giá trị trả về từ database là này :{database_save}")
+        # Validate date format
+        try:
+            kiemtra_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Please use YYYY-MM-DD format")
+
+        # First try to get data from Redis Minhdang_list
+        try:
+            # Get all items from Minhdang_list
+            cache_items = redis_client.lrange("Minhdang_list", 0, -1)
+            for item in cache_items:
+                try:
+                    item_data = json.loads(item)
+                    if item_data.get('date') == date:
+                        logging.info("Data found in Redis Minhdang_list")
+                        return item_data
+                except json.JSONDecodeError:
+                    continue
+        except Exception as cache_error:
+            logging.warning(f"Redis cache error: {str(cache_error)}")
+
+        # If not in Redis, query database
+        database_save = get_data_indatabase(db, date)
+        logging.info(f"Data from database: {database_save}")
 
         if database_save:
-            return {
-                'gold_prices':[{
+            result = {
+                'date': date,
+                'gold_prices': [{
                     "id": ldl.id,
-                    "price": ldl.price,
-                    "price_per_ounce": ldl.price_per_ounce,
-                    "price_per_luong": ldl.price_per_luong,
-                    "price_per_gram": ldl.price_per_gram,
-                    "timestamp": ldl.timestamp
-                }for ldl in database_save
-                 ]
+                    "price": str(ldl.price),
+                    "price_per_ounce": str(ldl.price_per_ounce),
+                    "price_per_luong": str(ldl.price_per_luong),
+                    "price_per_gram": str(ldl.price_per_gram),
+                    "timestamp": ldl.timestamp.isoformat() if ldl.timestamp else None
+                } for ldl in database_save]
             }
+
+            # Increment search count in PostgreSQL
+            search_count = crud.increment_search_count(db, date)
+            logging.info(f"Search count for {date}: {search_count}")
+
+            if search_count >= 10:
+                # Save to Redis Minhdang_list if search count >= 10
+                try:
+                    # Convert result to JSON string
+                    json_data = json.dumps(result)
+                    # Add to Minhdang_list
+                    redis_client.lpush("Minhdang_list", json_data)
+                    logging.info(f"Data saved to Redis Minhdang_list for date: {date}")
+                except Exception as cache_error:
+                    logging.warning(f"Failed to save to Redis: {str(cache_error)}")
+            else:
+                logging.info(f"Not saving to Redis yet (search count: {search_count})")
+
+            return result
         else:
-            logging.info("Không lấy được dữ liệu từ database ")
+            logging.info("No data found in database")
+            raise HTTPException(status_code=404, detail="No data found for the specified date")
     except Exception as e:
-        logging.info("LỖi không lấy được giá trị ")
+        logging.error(f"Error in search_data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/clear_redis")
+async def clear_redis():
+    try:
+        # Lấy danh sách tất cả các key
+        all_keys = redis_client.keys("*")
+        logging.info(f"Found {len(all_keys)} keys to delete")
+
+        # Xóa từng key
+        for key in all_keys:
+            redis_client.delete(key)
+            logging.info(f"Deleted key: {key}")
+
+        return {"message": f"Successfully deleted {len(all_keys)} keys from Redis"}
+    except Exception as e:
+        logging.error(f"Error clearing Redis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error clearing Redis: {str(e)}")
 
 
 
@@ -183,16 +246,7 @@ async def search_data(date: str, db: Session = Depends(get_db)):
 
 
 
-
-
-
-
-
-
-
-
-
-    # try: # nếu dúng thì chạy vào đây
+        # try: # nếu dúng thì chạy vào đây
     #     logging.info("Chạy vào chức năng search_data")
     #
     #     # Tìm trong Redis

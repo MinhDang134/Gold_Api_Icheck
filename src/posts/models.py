@@ -20,3 +20,11 @@ class Save_search_gold(SQLModel,table=True):
     price_per_ounce:Decimal = Field(sa_column=Column(Numeric(20,2)))
     price_per_luong:Decimal = Field(sa_column=Column(Numeric(20,2)))
     price_per_gram:Decimal = Field(sa_column=Column(Numeric(20,2)))
+
+
+class SearchCount(SQLModel, table=True):
+    __tablename__ = 'search_counts'
+    id: int = Field(default=None, primary_key=True)
+    date: str = Field(unique=True, index=True)
+    count: int = Field(default=0)
+    last_updated: datetime = Field(default=func.now())

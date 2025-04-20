@@ -13,11 +13,16 @@ try:
 except redis.ConnectionError:
     print("Không kết nối thành công ")
 
-def get_price_from_cache(redis_client,key:str):
-    cached_price = redis_client.get(key)
-    if cached_price:
-        return cached_price
-    return None
+
+def get_price_from_cache(redis_client, key: str):
+    try:
+        cached_price = redis_client.get(key)
+        if cached_price:
+            return json.loads(cached_price)
+        return None
+    except Exception as e:
+        logging.error(f"Error getting from cache: {str(e)}")
+        return None
 def laydulieuder_save(key:str):
     cache_save = redis_client.get(key)
     if cache_save:
@@ -35,6 +40,20 @@ def save_price_to_cache(redis_client, key: str, value: str):
         print(f"Đã lưu {key} vào Redis.")
     else:
         print(f"Lỗi khi lưu {key} vào Redis.")
+      #//
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str):

@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 app = FastAPI()
 
 if __name__ == "__main__":
-    uvicorn.run("src.posts.main:app", host="localhost", port=8002, reload=True)
+    uvicorn.run("src.posts.main:app", host="localhost", port=8004, reload=True)
 
 # @app.on_event("startup")
 # async def startup_event():
