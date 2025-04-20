@@ -1,7 +1,8 @@
 # src/Controller/crud.py
-from sqlmodel import Session
+from sqlmodel import Session,func
 from src.posts import models
 from src.posts.base_crud import CRUDBase
+
 from datetime import datetime
 
 gold_crud = CRUDBase(models.GoldPrice)
@@ -12,3 +13,7 @@ def get_gold_prices_in_range(db: Session, start_date: str, end_date: str):
     return (db.query(models.GoldPrice)
             .filter(models.GoldPrice.timestamp >= start_date,
                     models.GoldPrice.timestamp <= end_date).all())
+def get_data_indatabase(db : Session , date : str):
+    # nếu mà date truyền vào mà không có thì tính sau giờ cứ lấy trong database đã
+    kiemtra_date = datetime.strptime(date,"%Y-%m-%d").date()
+    return (db.query(models.GoldPrice).filter(func.date(models.GoldPrice.timestamp) == kiemtra_date).all())

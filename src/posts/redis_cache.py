@@ -24,7 +24,11 @@ def laydulieuder_save(key:str):
      return json.loads(cache_save)
     return None
 
-
+#4.22 sau khi nhận được dữ liệu thì ra sẽ set cái dữ liệu value đó vào key, đây là cái lưu của string thôi
+# còn lưu của list là lpush , lrange
+# set là hset , hremembers
+# hash là gì đó quên rồi đoạn ông lại
+# rồi lưu cái giá trị set đó vào result thích in ra màn hình thì in
 def save_price_to_cache(redis_client, key: str, value: str):
     result = redis_client.set(key, value)
     if result:
