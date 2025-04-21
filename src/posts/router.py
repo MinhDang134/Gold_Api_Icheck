@@ -1,30 +1,19 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException # import từ thư viện fastapi impỏt Apirouter để mà thực hiện quản lý các router để quản lý cái luồng chạy dễ hơn
-# Depends : giúp chỉ đến tái sử dụng lại code, khi mà một đoạn code nào đó phải dùng trong những router
-# HttpException : Thực hiện là khi mà em muốn hiển thị lỗi, hoặc là trang thái của doạn đó em có thể dùng cái này để mà hiển thị lỗi ra
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
-# sqlmodel nó là một thư viên, Sesstion là sao thì hiểu đơn gỉản là cái này sẽ giúp em tương tác với api em chỉ cần tạo ra request thôi
-# Ví dụ là em đi mua đồ circle k thì em gửi yêu cầu đến nhân viên là làm cái này làm cái kia xong nhân viên sẽ thực hiện yêu cầu của em
-# rồi đưa ra cái đồ em mua thì cũng như là gửi request xong nó trả về response
 import httpx
-# giống như request nhưng mà bất đồng bộ
 import json
-# thuộc tính json này có thể cho loads và dumps , load từ json thành đối tượng , dumps từ đối tượng thành json
-from src.posts.Dependecies import get_db # import getdb
+from src.posts.Dependecies import get_db
 from src.posts.crud import get_data_indatabase
-
-from src.posts.models import GoldPrice
 from src.posts.service import get_and_update_gold_price, calculate_gold_price, \
-    fetch_price_api, fetch_price_api_api  # import nhưng phương thức cần trong service cần dùng
-from src.posts import redis_cache, crud # import redis và crud
-from datetime import datetime, timedelta # Khai báo thư viện datime để gán dữ liệu các thứ
-from decimal import Decimal # khái báo thư viên decimal để làm rõ những số thập phân
-import logging # hiển thị ra lỗi
-from src.posts.redis_cache import redis_client, get_price_from_cache  # khai báo cái đường dẫn có localhost port va db
+    fetch_price_api, fetch_price_api_api
+from src.posts import redis_cache, crud
+from datetime import datetime, timedelta
+import logging
+from src.posts.redis_cache import redis_client, get_price_from_cache
 
-router = APIRouter() # Khai báo cái router từ ApiRouter luồng
-# Nó sẽ có tác dụng nhóm những router lại thành một cái để dễ xử lý , trong sang bên main mà gọi
+router = APIRouter()
 
 @router.post("/get_price/")
 async def get_price(db: Session = Depends(get_db)):
@@ -52,21 +41,12 @@ async def get_price(db: Session = Depends(get_db)):
     except HTTPException as http_exc:
         logging.error(f"Đã xảy ra lỗi HTTP: {http_exc.detail}")
         raise http_exc
-@router.get("/get_price_range/") # hàm này là lấy dữ liệu có trong cache và database để trả về
+@router.get("/get_price_range/")
 async def get_price_range(start_date: str, end_date: str, db: Session = Depends(get_db)):
-    try: # nếu đúng
-        # Chuyển đổi start_date và end_date thành datetime
-        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
-        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+    try:
+        gold_prices_range = crud.get_gold_prices_in_range(db, start_date, end_date)
+        rang_cache = redis_cache.rang_save_date_cache(redis_cache.redis_client, 'Minhdang_list', start_date, end_date)
 
-        # Lấy dữ liệu từ cơ sở dữ liệu và Redis
-        # gold_price_range gọi đến crud và lấy giá vàng thông qua database khi chuyền db , start và end day vào
-        gold_prices_range = crud.get_gold_prices_in_range(db, start_date, end_date) # lấy được giá vàng từ database nếu có ngày đó
-        # lấy giá vàng từ cache xem có không thì trả về tham số chuyền vào là server cache redis , key , start và end_date
-        rang_cache = redis_cache.rang_save_date_cache(redis_cache.redis_client, 'Minhdang_list', start_date, end_date) # lấy được giá trị từ redis
-        print(type(rang_cache))
-
-        # Nếu có dữ liệu từ Redis và Database
         if gold_prices_range or rang_cache:
             return {
                 "gold_prices": [
@@ -86,64 +66,24 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
                         "price_per_luong": rg['price_per_luong'],
                         "price_per_gram": rg['price_per_gram'],
                         "timestamp": rg['timestamp']
-                    } for rg in rang_cache # đây là do khi duyệt thì rg sẽ trở thành dict lên là sẽ khôg có id cũng như value thì phải truyền key vào
+                    } for rg in rang_cache
 
                 ]
             }
-        else: # nếu mà không tìm thấy dữ liệu nào thi chạy vào đây
+        else:
             raise HTTPException(status_code=404, detail="Không có dữ liệu trong phạm vi ngày đã cho.")
 
-    except ValueError as e: # nếu có lỗi thì hiển thị ra
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Ngày tháng không hợp lệ. Bạn hãy nhập theo định dạng YYYY-MM-DD.{str(e)} ")
-    except Exception as e: # nếu có lỗi thì hiển thị ra
+    except Exception as e:
         logging.error(f"Lỗi khi xử lý yêu cầu: {str(e)}")
         raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
 
-
-#52 nếu không có thì nó sẽ lấy trong api
-        # api_key = "goldapi-af6o2qsm9f2jcj1-io" # lấy key
-        # url = "https://www.goldapi.io/api/XAU/USD" # lấy url
-        #
-        # headers = {# lấy header
-        #     "x-access-token": api_key
-        # }
-        #
-        # async with httpx.AsyncClient() as client: #53 tạo một cái để truy xuất post,get,put các thứ tiếp
-        #     all_prices = [] #54 tạo một mảng rỗng
-        #     current_date = start_date_obj  #55 gán giá trị bắt đầu cho current_date
-        #
-        #     while current_date <= end_date_obj: #56 nếu mà current_date nhỏ hơn hoặc bằng end_date_obj thì đúng
-        #         date_str = current_date.strftime("%Y-%m-%d") #57 thay đổi kiểu dạng dữ liệu
-        #         #58 lấy dữ liệu trả về bên trong get_and_update_gold_price
-        #         price = await get_and_update_gold_price(client, url, headers, None)
-        #         #59 rồi nó cũng sẽ trả về giá rôì dùng cái giá đó thôi
-        #
-        #         formatted_price = str(price)
-        #         new_gold_price = crud.gold_crud.create(db, { #60 tạo một bảng dữ liệu mới cùng create của base_crud
-        #             "price": price,
-        #             "price_per_ounce": price * Decimal('31.1035'),
-        #             "price_per_luong": price * Decimal('37.5'),
-        #             "price_per_gram": price
-        #         })
-        #
-        #         all_prices.append({ #62 áp thông tin vào cái mảng rỗng
-        #             "date": date_str,
-        #             "price": price,
-        #             "timestamp": new_gold_price.timestamp
-        #         })
-        #
-        #         current_date += timedelta(days=1) #63 Ví dụ nếu current_date là 2025-01-04, sau khi thực thi câu lệnh này,
-        #                                           # giá trị của current_date sẽ là 2025-01-05.
-        #
-        #     return {"gold_prices": all_prices}#64 in ra cái bảng rỗng đó
-
 @router.get("/search_data")
-# router này là đường dẫn để phân biệt với cái router khác
-async def search_data(date: str, db: Session = Depends(get_db)): # tạo ra một hàm bất đồng bộ tên là search_data
-    # truyền date db vào từ cái section
-    try: # nếu đúng
-        try: # nếu đúng
-            cache_items = redis_client.lrange("Minhdang_list", 0, -1) # lấy toàn bộ dữ liệu từ key cache_items nếu có
+async def search_data(date: str, db: Session = Depends(get_db)):
+    try:
+        try:
+            cache_items = redis_client.lrange("Minhdang_list", 0, -1)
             for item in cache_items:
                 try:
                     item_data = json.loads(item)
@@ -154,16 +94,14 @@ async def search_data(date: str, db: Session = Depends(get_db)): # tạo ra mộ
                     continue
         except Exception as cache_error:
             logging.warning(f"lỗi redis: {str(cache_error)}")
-
+            #//
         database_save = get_data_indatabase(db, date)
         logging.info(f"Lấy dữ liệu từ database: {database_save}")
-
         if not database_save:
             logging.info("Vào đây là lấy giá trong database")
             try:
                 api_data = await fetch_price_api_api(date)
                 if api_data:
-                    # Save to database
                     db.add(api_data)
                     db.commit()
                     db.refresh(api_data)
@@ -178,11 +116,6 @@ async def search_data(date: str, db: Session = Depends(get_db)): # tạo ra mộ
                 logging.error(f"lỗi lấy dữ liệu từ API: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Không tìm thấy dữ liệu giá vàng cho ngày này hoặc giá vàng không hợp lệ: {str(e)}")
 
-        if not database_save or not any(price.price > 0 for price in database_save):
-            raise HTTPException(
-                status_code=404,
-                detail="Không tìm thấy dữ liệu giá vàng cho ngày này hoặc giá vàng không hợp lệ"
-            )
 
         result = {
             'date': date,
@@ -193,19 +126,14 @@ async def search_data(date: str, db: Session = Depends(get_db)): # tạo ra mộ
                 "price_per_luong": str(ldl.price_per_luong),
                 "price_per_gram": str(ldl.price_per_gram),
                 "timestamp": ldl.timestamp.isoformat() if ldl.timestamp else None
-            } for ldl in database_save if ldl.price > 0]  # Only include prices greater than 0
+            } for ldl in database_save]
         }
-
-
         search_count = crud.increment_search_count(db, date)
         logging.info(f"Search count for {date}: {search_count}")
 
         if search_count >= 10:
-
             try:
-
                 json_data = json.dumps(result)
-
                 redis_client.lpush("Minhdang_list", json_data)
                 logging.info(f"Lưu dữ liệu vào redis tên key là Minhdang_list: {date}")
             except Exception as cache_error:
@@ -224,9 +152,6 @@ async def search_data(date: str, db: Session = Depends(get_db)): # tạo ra mộ
 async def clear_redis():
     try:
         all_keys = redis_client.keys("*")
-        logging.info(f"số  {len(all_keys)} keys bị xóa là")
-
-        # Xóa từng key
         for key in all_keys:
             redis_client.delete(key)
             logging.info(f"Xóa key: {key}")

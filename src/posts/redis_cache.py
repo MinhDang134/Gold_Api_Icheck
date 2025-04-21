@@ -28,12 +28,6 @@ def laydulieuder_save(key:str):
     if cache_save:
      return json.loads(cache_save)
     return None
-
-#4.22 sau khi nhận được dữ liệu thì ra sẽ set cái dữ liệu value đó vào key, đây là cái lưu của string thôi
-# còn lưu của list là lpush , lrange
-# set là hset , hremembers
-# hash là gì đó quên rồi đoạn ông lại
-# rồi lưu cái giá trị set đó vào result thích in ra màn hình thì in
 def save_price_to_cache(redis_client, key: str, value: str):
     result = redis_client.set(key, value)
     if result:
@@ -41,21 +35,6 @@ def save_price_to_cache(redis_client, key: str, value: str):
     else:
         print(f"Lỗi khi lưu {key} vào Redis.")
       #//
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str):
     try:
         if key == "Minhdang_list":
@@ -68,7 +47,6 @@ def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str)
             result = []
             for item in cache_items:
                 try:
-
                     existing_item = json.loads(item)
                     item_date = datetime.strptime(existing_item['date'], "%Y-%m-%d")
 
@@ -77,11 +55,6 @@ def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str)
                 except json.JSONDecodeError as e:
                     logging.error(f"Lỗi khi phân tích cú pháp JSON: {e}")
                     continue
-
-
-            if not result:
-                logging.error(f"Không tìm thấy dữ liệu trong phạm vi ngày từ {start_date} đến {end_date}")
-                return []
 
             return result
     except Exception as e:
