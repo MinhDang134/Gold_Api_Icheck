@@ -46,8 +46,12 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
     try:
         gold_prices_range = crud.get_gold_prices_in_range(db, start_date, end_date)
         rang_cache = redis_cache.rang_save_date_cache(redis_cache.redis_client, 'Minhdang_list', start_date, end_date)
-
         if gold_prices_range or rang_cache:
+            logging.info("Chay vao 3")
+            logging.info(f"Noi Dung la{gold_prices_range}")
+            logging.info(f"Noi Dung la{rang_cache}")
+
+
             return {
                 "gold_prices": [
                     {
@@ -58,25 +62,27 @@ async def get_price_range(start_date: str, end_date: str, db: Session = Depends(
                         "price_per_gram": gp.price_per_gram,
                         "timestamp": gp.timestamp
                     } for gp in gold_prices_range
-                ],
-                'save_search_gold': [
-                    {
-                        "price": rg['price'],
-                        "price_per_ounce": rg['price_per_ounce'],
-                        "price_per_luong": rg['price_per_luong'],
-                        "price_per_gram": rg['price_per_gram'],
-                        "timestamp": rg['timestamp']
-                    } for rg in rang_cache
-
                 ]
+                # ],
+                # 'save_search_gold': [
+                #     {
+                #         "price": rg['price'],
+                #         "price_per_ounce": rg['price_per_ounce'],
+                #         "price_per_luong": rg['price_per_luong'],
+                #         "price_per_gram": rg['price_per_gram'],
+                #         "timestamp": rg['timestamp']
+                #     } for rg in rang_cache
+                #
+                # ]
             }
+
         else:
             raise HTTPException(status_code=404, detail="Không có dữ liệu trong phạm vi ngày đã cho.")
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Ngày tháng không hợp lệ. Bạn hãy nhập theo định dạng YYYY-MM-DD.{str(e)} ")
     except Exception as e:
-        logging.error(f"Lỗi khi xử lý yêu cầu: {str(e)}")
+        logging.error(f"Lỗi khi xử lý yêu cầu siu2: {str(e)}")
         raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
 
 @router.get("/search_data")
@@ -90,8 +96,10 @@ async def search_data(date: str, db: Session = Depends(get_db)):
                     if item_data.get('date') == date:
                         logging.info("Dữ liệu đã được thêm vào trong redis")
                         return item_data
-                except json.JSONDecodeError:
-                    continue
+                # except json.JSONDecodeError:
+                #     continue
+                except Exception as e:
+                    logging.info("loi khong thay du lieu")
         except Exception as cache_error:
             logging.warning(f"lỗi redis: {str(cache_error)}")
             #//

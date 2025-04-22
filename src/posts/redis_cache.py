@@ -58,5 +58,5 @@ def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str)
 
             return result
     except Exception as e:
-        logging.error(f"Lỗi khi xử lý dữ liệu: {str(e)}")
+        logging.error(f"Lỗi khi xử lý dữ liệu siu: {str(e)}")
         return []
