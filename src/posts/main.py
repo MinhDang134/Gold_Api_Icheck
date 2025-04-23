@@ -2,26 +2,46 @@
 
 from fastapi import FastAPI
 
-from src.posts.database import SessionLocal
+from src.posts.database import SessionLocal, init_db
 from src.posts.router import router
 import uvicorn
+import os
 # from src.posts.service import data_mau
 from contextlib import asynccontextmanager
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("Starting up...")
+    try:
+        print(f"Environment: {os.getenv('ENV', 'development')}")
+        init_db()
+        print("Database initialization completed")
+    except Exception as e:
+        print(f"Error during startup: {str(e)}")
+        raise
+    yield
+    # Shutdown
+    print("Shutting down...")
+
 
 if __name__ == "__main__":
-    uvicorn.run("src.posts.main:app", host="localhost", port=8006, reload=True)
+    # Set environment variable for local development
+    os.environ["ENV"] = "development"
+    uvicorn.run(
+        "src.posts.main:app",
+        host="localhost",
+        port=8000,
+        reload=True
+    )
 
-# @app.on_event("startup")
-# async def startup_event():
-#     await data_mau()
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+app = FastAPI(
+    title="Gold Price API",
+    description="API for Gold Price Management",
+    version="1.0.0",
+    lifespan=lifespan
+        )
 # Include router
 app.include_router(router)
 

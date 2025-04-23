@@ -1,4 +1,3 @@
-
 from src.posts.database import SessionLocal
 async def get_db():
 

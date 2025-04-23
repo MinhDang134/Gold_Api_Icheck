@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ENV=production
+      - DATABASE_URL=postgresql://postgres:minhdang@db:5432/gold_price
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+    command: uvicorn src.posts.main:app --port 8000
+    restart: always #Đảm bảo rằng container api sẽ tự động khởi động lại nếu nó gặp sự cố trong môi trường sản xuất.
+
+  db:
+    restart: always
+    environment: #Các biến môi trường này được lấy từ biến môi trường hệ thống (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB) thay vì khai báo trực tiếp trong file.
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+
+    ports: []
+
+  redis:
+    restart: always

@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 import httpx
@@ -18,15 +16,17 @@ router = APIRouter()
 @router.post("/get_price/")
 async def get_price(db: Session = Depends(get_db)):
     try:
-        cached_price = redis_cache.get_price_from_cache(redis_client, "gold_price")
+        # cached_price = redis_cache.get_price_from_cache(redis_client, "Minhdang_list")
         api_key = "goldapi-3dwn9sm9pcamod-io"
         url = f"https://www.goldapi.io/api/XAU/USD"
         headers = {
-            "x-access-token": api_key
+            "x-access-token": api_key,
+            "Content-Type": "application/json"
         }
 
         async with httpx.AsyncClient() as client:
-            price = await get_and_update_gold_price(client, url, headers, cached_price)
+            logging.info("chay vao day")
+            price = await get_and_update_gold_price(client, url, headers)
             price_per_ounce, price_per_luong, price_per_gram = calculate_gold_price(price)
 
             new_gold_price = crud.gold_crud.create(db, {
@@ -40,7 +40,7 @@ async def get_price(db: Session = Depends(get_db)):
 
     except HTTPException as http_exc:
         logging.error(f"Đã xảy ra lỗi HTTP: {http_exc.detail}")
-        raise http_exc
+        raise HTTPException(status_code=500,detail=f"Xảy ra lỗi là{http_exc}")
 @router.get("/get_price_range/")
 async def get_price_range(start_date: str, end_date: str, db: Session = Depends(get_db)):
     try:

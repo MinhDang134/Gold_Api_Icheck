@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="Api_gold" uuid="2023284e-d63a-4723-ac63-625527b7f3ba">
+    <data-source source="LOCAL" name="gold_price" uuid="6c46267f-10cf-484d-9594-724000eb87a7">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>
