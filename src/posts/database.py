@@ -1,43 +1,53 @@
 from contextlib import asynccontextmanager
 import os
 from sqlalchemy.orm import sessionmaker
-from sqlmodel import create_engine,SQLModel,Session
+from sqlmodel import create_engine, SQLModel, Session
 from fastapi import FastAPI
+import logging
 
-
-# Kiểm tra môi trường để sử dụng connection string phù hợp
+# Database configuration with environment variables
 ENV = os.getenv("ENV", "development")
 if ENV == "docker":
     DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:minhdang@db:5432/gold_price")
 else:
-    DATABASE_URL = "postgresql://postgres:minhdang@localhost:5432/gold_price"
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:minhdang@localhost:5432/gold_price")
 
-print(f"Using database URL: {DATABASE_URL}")
+logging.info(f"Using database URL: {DATABASE_URL}")
+
+# Create database engine with connection pooling and error handling
 engine = create_engine(
     DATABASE_URL,
-    echo=True,  # Set to False in production
-    pool_pre_ping=True,  # Kiểm tra kết nối trước khi sử dụng
-    pool_size=5,  # Số lượng kết nối trong pool
-    max_overflow=10  # Số lượng kết nối có thể vượt quá pool_size
+    echo=ENV == "development",  # Only echo in development
+    pool_pre_ping=True,  # Check connection before using
+    pool_size=5,  # Number of connections in pool
+    max_overflow=10,  # Number of connections that can exceed pool_size
+    pool_timeout=30,  # Timeout for getting a connection from pool
+    pool_recycle=1800  # Recycle connections after 30 minutes
 )
 
-SessionLocal = sessionmaker(autocommit=False,autoflush=False,bind = engine)
-#SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-#Base = declarative_base()
+# Create session factory
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
 def init_db():
     try:
-        print("Initializing database...")
+        logging.info("Initializing database...")
         SQLModel.metadata.create_all(engine)
-        print("Database initialized successfully!")
+        logging.info("Database initialized successfully!")
     except Exception as e:
-        print(f"Error initializing database: {str(e)}")
+        logging.error(f"Error initializing database: {str(e)}")
         raise
+
 @asynccontextmanager
 async def get_async_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        logging.error(f"Database error: {str(e)}")
+        raise
     finally:
         db.close()
-
-
