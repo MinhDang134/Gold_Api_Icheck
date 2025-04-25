@@ -11,7 +11,7 @@ services:
       - ./src:/app/src
     environment:
       - ENV=docker
-      - DATABASE_URL=postgresql+psycopg2://minhdangpy134:minhdang@db:5432/gold_price
+      - DATABASE_URL=postgresql://minhdangpy134:minhdang@db:5432/gold_price
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     command: >

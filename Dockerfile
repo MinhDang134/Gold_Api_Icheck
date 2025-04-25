@@ -3,7 +3,7 @@ FROM python:3.13
 # Ngăn ghi file .pyc
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DATABASE_URL=postgresql+psycopg2://minhdangpy134:minhdang@db:5432/gold_price \
+    DATABASE_URL=postgresql://minhdangpy134:minhdang@db:5432/gold_price \
     REDIS_HOST=redis \
     REDIS_PORT=6379 \
     ENV=docker

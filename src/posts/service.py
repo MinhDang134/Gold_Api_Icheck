@@ -12,7 +12,7 @@ from src.posts import redis_cache, models
 logging.basicConfig(level=logging.INFO)
 
 # Get API key from environment variable
-GOLD_API_KEY = os.getenv("GOLD_API_KEY", "goldapi-3dwn9sm9pcamod-io")
+
 
 
 async def fetch_price_api(client: httpx.AsyncClient, url: str, headers: dict, date: str):
@@ -88,9 +88,10 @@ def calculate_gold_price(price: Decimal):
 
 async def fetch_price_api_api(date: str):
     try:
+        api_key = "goldapi-aqg6bojsm9wkc6kv-io"
         url = f"https://www.goldapi.io/api/XAU/USD/{date}"
         headers = {
-            "x-access-token": GOLD_API_KEY,
+            "x-access-token": api_key,
             "Content-Type": "application/json"
         }
 

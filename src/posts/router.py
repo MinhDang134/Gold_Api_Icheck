@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/get_price/")
 async def get_price(db: Session = Depends(get_db)):
     try:
-        api_key = os.getenv("GOLD_API_KEY", "goldapi-3dwn9sm9pcamod-io")
+        api_key = "goldapi-aqg6bojsm9wkc6kv-io"
         url = "https://www.goldapi.io/api/XAU/USD"
         headers = {
             "x-access-token": api_key,
@@ -52,45 +52,48 @@ async def get_price(db: Session = Depends(get_db)):
         logging.error(f"Unexpected error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
+
 @router.get("/get_price_range/")
 async def get_price_range(start_date: str, end_date: str, db: Session = Depends(get_db)):
     try:
-        # Validate date format
-        try:
-            datetime.strptime(start_date, "%Y-%m-%d")
-            datetime.strptime(end_date, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Please use YYYY-MM-DD")
-
         gold_prices_range = crud.get_gold_prices_in_range(db, start_date, end_date)
         rang_cache = redis_cache.rang_save_date_cache(redis_cache.redis_client, 'Minhdang_list', start_date, end_date)
 
-        if not gold_prices_range and not rang_cache:
-            raise HTTPException(status_code=404, detail="No data found for the specified date range")
+        if gold_prices_range or rang_cache:
+            logging.info("Chay vao 3")
+            logging.info(f"Noi Dung la{gold_prices_range}")
+            logging.info(f"Noi Dung la{rang_cache}")
 
-        result = {
-            "gold_prices": [
-                {
-                    "id": gp.id,
-                    "price": str(gp.price),
-                    "price_per_ounce": str(gp.price_per_ounce),
-                    "price_per_luong": str(gp.price_per_luong),
-                    "price_per_gram": str(gp.price_per_gram),
-                    "timestamp": gp.timestamp.isoformat()
-                } for gp in gold_prices_range
-            ]
-        }
+            return {
+                "gold_prices": [
+                    {
+                        "price": gp.price,
+                        "price_per_ounce": gp.price_per_ounce,
+                        "price_per_luong": gp.price_per_luong,
+                        "price_per_gram": gp.price_per_gram,
+                        "timestamp": gp.timestamp
+                    } for gp in gold_prices_range
+                ]
+                # Phần comment out:
+                # 'save_search_gold': [
+                #     {
+                #         "price": rg['price'],
+                #         "price_per_ounce": rg['price_per_ounce'],
+                #         "price_per_luong": rg['price_per_luong'],
+                #         "price_per_gram": rg['price_per_gram'],
+                #         "timestamp": rg['timestamp']
+                #     } for rg in rang_cache
+                # ]
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Không có dữ liệu trong phạm vi ngày đã cho.")
 
-        if rang_cache:
-            result["cached_prices"] = rang_cache
-
-        return result
-
-    except HTTPException as he:
-        raise he
+    except ValueError as e:
+        raise HTTPException(status_code=400,
+                            detail=f"Ngày tháng không hợp lệ. Bạn hãy nhập theo định dạng YYYY-MM-DD.{str(e)} ")
     except Exception as e:
-        logging.error(f"Error processing price range request: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+        logging.error(f"Lỗi khi xử lý yêu cầu siu2: {str(e)}")
+        raise HTTPException(status_code=500, detail="Đã xảy ra lỗi khi xử lý yêu cầu.")
 
 @router.get("/search_data")
 async def search_data(date: str, db: Session = Depends(get_db)):
