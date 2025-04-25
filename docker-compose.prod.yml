@@ -7,10 +7,9 @@ services:
       dockerfile: Dockerfile
     environment:
       - ENV=production
-      - DATABASE_URL=postgresql://postgres:minhdang@db:5432/gold_price
+      - DATABASE_URL=postgresql+psycopg2://minhdangpy134:minhdang@db:5432/gold_price
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - GOLD_API_KEY=${GOLD_API_KEY}
     depends_on:
       - db
       - redis
@@ -23,13 +22,15 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - bridge_network
 
   db:
     image: postgres:latest
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=minhdangpy134
+      - POSTGRES_PASSWORD=minhdang
+      - POSTGRES_DB=gold_price
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
@@ -38,6 +39,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - bridge_network
 
   redis:
     image: redis:latest
@@ -52,7 +55,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - bridge_network
 
 volumes:
   postgres_data:
-  redis_data: 
+  redis_data:
+
+networks:
+  bridge_network:
+    driver: bridge
