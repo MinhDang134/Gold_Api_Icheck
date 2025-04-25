@@ -9,11 +9,13 @@ services:
       - "8000:8000"
     volumes:
       - ./src:/app/src
+    env_file:
+      - .env
     environment:
       - ENV=docker
-      - DATABASE_URL=postgresql://minhdangpy134:minhdang@db:5432/gold_price
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
     command: >
       sh -c "python -m uvicorn src.posts.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
@@ -27,10 +29,13 @@ services:
     image: postgres:16
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
     environment:
-      - POSTGRES_USER=minhdangpy134
-      - POSTGRES_PASSWORD=minhdang
-      - POSTGRES_DB=gold_price
+      - ENV=docker
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
       - "5432:5432"
     restart: always

@@ -11,7 +11,7 @@ if ENV == "docker":
   DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://minhdangpy134:minhdang@db:5432/gold_price")
 else:
   DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://minhdangpy134:minhdang@localhost:5432/gold_price")
-  logging.info(f"Using database URL: {DATABASE_URL}")
+  logging.info(f"ENV: {ENV}, Database URL: {DATABASE_URL}")
 
 
 engine = create_engine(

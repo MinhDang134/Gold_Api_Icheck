@@ -1,4 +1,4 @@
-from sqlalchemy import table, Numeric
+from sqlalchemy import Numeric
 from sqlmodel import SQLModel , Field, Column
 from sqlalchemy.sql import func
 from decimal import Decimal

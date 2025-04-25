@@ -1,16 +1,22 @@
 # src/main.py
 
 from fastapi import FastAPI
+from sqlmodel import SQLModel
 
-from src.posts.database import SessionLocal
+import src.posts.models
+from src.posts.database import SessionLocal, engine
 from src.posts.router import router
-import uvicorn
-import os
-# from src.posts.service import data_mau
-from contextlib import asynccontextmanager
+
+
+# if __name__ == "__main__":
+#  uvicorn.run("src.posts.main:app",host="localhost",port=8001,reload=True)
+# # Include router
 app = FastAPI()
-if __name__ == "__main__":
- uvicorn.run("src.posts.main:app",host="localhost",port=8001,reload=True)
-# Include router
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
+@app.get("/")
+def read_root():
+    return {"message": "Gold API running!"}
 app.include_router(router)
 

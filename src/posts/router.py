@@ -182,3 +182,7 @@ async def clear_redis():
     except Exception as e:
         logging.error(f"Error clearing Redis: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error clearing Redis: {str(e)}")
+
+@router.get("/health")
+async def health():
+    return {"status": "ok"}
