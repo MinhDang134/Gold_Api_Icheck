@@ -23,9 +23,9 @@ redis_client = redis.Redis(
 
 try:
     redis_client.ping()
-    logging.info("Redis connection successful")
+    logging.info("Redis kết nối thành công")
 except redis.ConnectionError as e:
-    logging.error(f"Redis connection failed: {str(e)}")
+    logging.error(f"Redis kết nối thất bại: {str(e)}")
     raise
 
 
@@ -36,19 +36,19 @@ def get_price_from_cache(redis_client, key: str):
             return json.loads(cached_price)
         return None
     except (redis.RedisError, json.JSONDecodeError) as e:
-        logging.error(f"Error getting from cache: {str(e)}")
+        logging.error(f"Lỗi dữ liệu từ cache: {str(e)}")
         return None
 def save_price_to_cache(redis_client, key: str, value: str):
     try:
         result = redis_client.set(key, value)
         if result:
-            logging.info(f"Successfully saved {key} to Redis")
+            logging.info(f"thành công lưu vào  {key} của Redis")
             return True
         else:
-            logging.error(f"Failed to save {key} to Redis")
+            logging.error(f"thất bại lưu vào {key} của Redis")
             return False
     except redis.RedisError as e:
-        logging.error(f"Redis error while saving: {str(e)}")
+        logging.error(f"Redis lỗi: {str(e)}")
         return False
 def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str):
     try:
@@ -58,7 +58,7 @@ def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str)
 
             cache_items = redis_client.lrange(key, 0, -1)
             if not cache_items:
-                logging.warning(f"No data found in Redis with key '{key}'")
+                logging.warning(f"không có data trong key '{key}'")
                 return []
 
             result = []
@@ -69,7 +69,7 @@ def rang_save_date_cache(redis_client, key: str, start_date: str, end_date: str)
                     if start_date <= item_date <= end_date:
                         result.append(existing_item)
                 except (json.JSONDecodeError, KeyError) as e:
-                    logging.error(f"Error parsing JSON or missing date field: {str(e)}")
+                    logging.error(f"Lỗi json: {str(e)}")
                     continue
             return result
     except (redis.RedisError, ValueError) as e:

@@ -36,7 +36,7 @@ async def get_price(db: Session = Depends(get_db)):
                 "price_per_gram": price_per_gram,
                 "timestamp": datetime.now()
             })
-            logging.info(f"Saved gold price to database: {price}")
+            logging.info(f"lưu giá vàng database: {price}")
             return {
                 "price": str(price),
                 "price_per_ounce": str(price_per_ounce),
@@ -46,11 +46,11 @@ async def get_price(db: Session = Depends(get_db)):
             }
 
     except HTTPException as http_exc:
-        logging.error(f"HTTP error occurred: {http_exc.detail}")
+        logging.error(f"HTTP lỗi : {http_exc.detail}")
         raise
     except Exception as e:
-        logging.error(f"Unexpected error occurred: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+        logging.error(f"Bị lỗi sau : {str(e)}")
+        raise HTTPException(status_code=500, detail=f"bị lỗi sau : {str(e)}")
 
 
 @router.get("/get_price_range/")
@@ -102,7 +102,7 @@ async def search_data(date: str, db: Session = Depends(get_db)):
         try:
             datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Please use YYYY-MM-DD")
+            raise HTTPException(status_code=400, detail="không đúng định dang, vui lòng dùng định dạng YYYY-MM-DD")
 
         # Try to get from cache first
         try:
@@ -111,7 +111,7 @@ async def search_data(date: str, db: Session = Depends(get_db)):
                 try:
                     item_data = json.loads(item)
                     if item_data.get('date') == date:
-                        logging.info("Data retrieved from cache")
+                        logging.info("dữ liệu được lấy từ redis")
                         return item_data
                 except json.JSONDecodeError:
                     continue
@@ -121,7 +121,7 @@ async def search_data(date: str, db: Session = Depends(get_db)):
         # If not in cache, get from database
         database_save = get_data_indatabase(db, date)
         if database_save:
-            logging.info(f"Data retrieved from database: {database_save}")
+            logging.info(f"dữ liệu được nhận từ database: {database_save}")
             result = {
                 'date': date,
                 'gold_prices': [{
@@ -143,7 +143,7 @@ async def search_data(date: str, db: Session = Depends(get_db)):
                 db.commit()
                 db.refresh(api_data)
                 database_save = [api_data]
-                logging.info("Data retrieved from API and saved to database")
+                logging.info("dữ liệu được lấy từ api và lưu vào database")
                 result = {
                     'date': date,
                     'gold_prices': [{
@@ -157,18 +157,18 @@ async def search_data(date: str, db: Session = Depends(get_db)):
                 }
                 return result
             else:
-                raise HTTPException(status_code=404, detail="Could not get gold price from API")
+                raise HTTPException(status_code=404, detail="không thể lấy giá vàng từ api")
         except HTTPException as api_error:
             raise api_error
         except Exception as e:
-            logging.error(f"Error fetching from API: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error fetching data: {str(e)}")
+            logging.error(f"lỗi lấy data : {str(e)}")
+            raise HTTPException(status_code=500, detail=f"lỗi lấy data: {str(e)}")
 
     except HTTPException as he:
         raise he
     except Exception as e:
-        logging.error(f"Error in search_data: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+        logging.error(f"lỗi tìm kiếm dữ liệu: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"lỗi xử lý yêu cầu :  {str(e)}")
 
 @router.delete("/clear_redis")
 async def clear_redis():
@@ -176,12 +176,12 @@ async def clear_redis():
         all_keys = redis_client.keys("*")
         for key in all_keys:
             redis_client.delete(key)
-            logging.info(f"Deleted key: {key}")
+            logging.info(f"Xóa key: {key}")
 
-        return {"message": f"Successfully deleted {len(all_keys)} keys from Redis"}
+        return {"message": f"Xóa thành công {len(all_keys)} keys từ Redis"}
     except Exception as e:
-        logging.error(f"Error clearing Redis: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error clearing Redis: {str(e)}")
+        logging.error(f"lỗi xóa redis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"lỗi xóa redis: {str(e)}")
 
 @router.get("/health")
 async def health():

@@ -17,6 +17,6 @@ def on_startup():
     SQLModel.metadata.create_all(engine)
 @app.get("/")
 def read_root():
-    return {"message": "Gold API running!"}
+    return {"Thông báo":"Api bắt đầu chạy"}
 app.include_router(router)
 
