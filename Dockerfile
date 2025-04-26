@@ -3,7 +3,6 @@ FROM python:3.13
 # Ngăn ghi file .pyc
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-
 WORKDIR /src
 
 # Copy yêu cầu cài đặt trước để tận dụng layer cache

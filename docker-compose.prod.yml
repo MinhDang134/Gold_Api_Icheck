@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: minhdangpy134/gold_api_docker:latest
     env_file:
       - .env
     environment:
@@ -26,46 +24,3 @@ services:
       retries: 3
     networks:
       - bridge_network
-
-  db:
-    image: postgres:latest
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    networks:
-      - bridge_network
-
-  redis:
-    image: redis:latest
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    networks:
-      - bridge_network
-
-volumes:
-  postgres_data:
-  redis_data:
-
-networks:
-  bridge_network:
-    driver: bridge
